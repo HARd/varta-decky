@@ -178,10 +178,6 @@ async function injectBadgeIntoStore(appid: string) {
             devNodes.forEach(function(n) { devs.push(n.textContent.trim()); });
             var developer = devs.join(", ") || "Unknown";
             
-            var url = ${JSON.stringify(payload.remoteDatabaseUrl)};
-            if (!url.endsWith("/")) url += "/";
-            url += "reports.json";
-            
             var data = {
               appid: ${JSON.stringify(payload.appid)},
               name: name.substring(0, 199),
@@ -189,7 +185,7 @@ async function injectBadgeIntoStore(appid: string) {
               timestamp: Date.now()
             };
             
-            console.debug("VARTA_REPORT:" + JSON.stringify({ url: url, data: data }));
+            console.debug("VARTA_REPORT:" + JSON.stringify({ data: data }));
           };
 
           document.body.appendChild(badge);

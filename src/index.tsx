@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   overlayOpacity: 0.35,
   showBadges: true,
   remoteDatabaseEnabled: true,
-  remoteDatabaseUrl: "https://hrai-decky-default-rtdb.europe-west1.firebasedatabase.app/",
+  remoteDatabaseUrl: "https://api.varta.games/public",
   libraryBadgePosition: "bottom-right",
   libraryBadgeStyle: "text",
   language: "uk",
