@@ -524,7 +524,7 @@ class Plugin:
         report_appids = [str(r) for r in reports if isinstance(r, (str, int))]
 
         return {
-            "version": "api.varta.games",
+            "version": "1.0.1",
             "source": "VARTA API",
             "hostile": [str(name) for name in hostile],
             "ukrainian": [str(name) for name in ukrainian],
