@@ -380,9 +380,13 @@ class Plugin:
 
         def _send():
             try:
-                req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "varta-decky/1.0"
+                }
+                req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, timeout=12, context=SSL_CONTEXT) as response:
-                    return response.getcode() == 200
+                    return response.getcode() in (200, 201, 202, 204)
             except Exception as e:
                 decky.logger.error(f"Failed to report game: {e}")
                 return False
