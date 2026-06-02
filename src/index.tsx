@@ -48,6 +48,7 @@ const getSettings = callable<[], PluginSettings>("get_settings");
 const saveSettings = callable<[{settings: PluginSettings}], PluginSettings>("save_settings");
 const setSetting = callable<[{key: string, value: any}], PluginSettings>("set_setting");
 const refreshDatabase = callable<[force: boolean], DatabaseStats>("refresh_database");
+const getUpdateStatus = callable<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status");
 const getDatabaseStats = callable<[], DatabaseStats>("get_database_stats");
 
 function getColorOptions(lang: "uk" | "en") {
@@ -160,8 +161,8 @@ function Content() {
         if (mounted) setStatsError(String(err));
       });
 
-    serverAPI.callPluginMethod<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status", {}).then((res) => {
-      if (res.success && mounted) setUpdateInfo(res.result);
+    getUpdateStatus().then((res) => {
+      if (mounted) setUpdateInfo(res);
     });
 
     return () => {
