@@ -243,11 +243,25 @@ class Plugin:
                 with urllib.request.urlopen(req, timeout=10, context=SSL_CONTEXT) as response:
                     if response.getcode() == 200:
                         releases = json.loads(response.read().decode("utf-8"))
-                        if releases:
-                            latest = releases[0].get("tag_name", "").lstrip("v")
-                            if self._parse_version(latest) > self._parse_version(current):
-                                info["hasUpdate"] = True
-                                info["latestVersion"] = latest
+                        current_is_stable = "stable" in current.lower()
+                        current_is_testing = "testing" in current.lower()
+                        
+                        latest = None
+                        for r in releases:
+                            tag = r.get("tag_name", "").lstrip("v")
+                            if current_is_stable and "stable" in tag.lower():
+                                latest = tag
+                                break
+                            elif current_is_testing and "testing" in tag.lower():
+                                latest = tag
+                                break
+                            elif not current_is_stable and not current_is_testing:
+                                latest = tag
+                                break
+
+                        if latest and self._parse_version(latest) > self._parse_version(current):
+                            info["hasUpdate"] = True
+                            info["latestVersion"] = latest
             except Exception as e:
                 decky.logger.error(f"Failed to check for updates: {e}")
             return info
