@@ -94,8 +94,7 @@ function Content() {
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<DatabaseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
-
-
+  const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -354,6 +353,19 @@ function Content() {
       </PanelSection>
 
       <WishlistScanner getAppStatus={getResolvedAppStatus} lang={lang} />
+
+      {updateInfo?.hasUpdate && (
+        <PanelSection>
+          <div style={{ background: "rgba(39, 174, 96, 0.15)", border: "1px solid rgba(39, 174, 96, 0.4)", padding: "12px", borderRadius: "8px", marginTop: "16px", textAlign: "center" }}>
+            <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "4px" }}>
+              Доступна нова версія: {updateInfo.latestVersion}
+            </div>
+            <div style={{ color: "#ccc", fontSize: "12px" }}>
+              Оновіть плагін через GitHub
+            </div>
+          </div>
+        </PanelSection>
+      )}
     </>
   );
 }

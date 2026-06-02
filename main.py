@@ -211,6 +211,50 @@ class Plugin:
         await self._refresh_database(force=force)
         return await self.get_database_stats()
 
+    def _parse_version(self, v_str):
+        v_str = str(v_str).lstrip('v')
+        parts = v_str.split('-', 1)
+        main_parts = parts[0].split('.')
+        try:
+            major = int(main_parts[0]) if len(main_parts) > 0 else 0
+            minor = int(main_parts[1]) if len(main_parts) > 1 else 0
+            patch = int(main_parts[2]) if len(main_parts) > 2 else 0
+        except ValueError:
+            return (0, 0, 0, 0)
+        weight = 1 if len(parts) > 1 and 'testing' in parts[1] else 2
+        return (major, minor, patch, weight)
+
+    async def get_update_status(self):
+        await self._ensure_loaded()
+        now = time.time()
+        if now - getattr(self, "_update_checked_at", 0) < 3600:
+            return getattr(self, "_update_info", {"hasUpdate": False, "latestVersion": ""})
+
+        self._update_checked_at = now
+        info = {"hasUpdate": False, "latestVersion": ""}
+
+        def _check():
+            try:
+                pkg_path = os.path.join(self._plugin_dir, "package.json")
+                with open(pkg_path, "r", encoding="utf-8") as f:
+                    current = json.load(f).get("version", "0.0.0")
+
+                req = urllib.request.Request("https://api.github.com/repos/HARd/varta-decky/releases", headers={"User-Agent": "varta-decky/1.0"})
+                with urllib.request.urlopen(req, timeout=10, context=SSL_CONTEXT) as response:
+                    if response.getcode() == 200:
+                        releases = json.loads(response.read().decode("utf-8"))
+                        if releases:
+                            latest = releases[0].get("tag_name", "").lstrip("v")
+                            if self._parse_version(latest) > self._parse_version(current):
+                                info["hasUpdate"] = True
+                                info["latestVersion"] = latest
+            except Exception as e:
+                decky.logger.error(f"Failed to check for updates: {e}")
+            return info
+
+        self._update_info = await asyncio.get_event_loop().run_in_executor(None, _check)
+        return self._update_info
+
     async def get_cef_debugger_url(self):
         import os
         path = os.path.expanduser("~/.local/share/Steam/.cef-enable-remote-debugging")
