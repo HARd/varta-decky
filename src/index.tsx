@@ -160,6 +160,10 @@ function Content() {
         if (mounted) setStatsError(String(err));
       });
 
+    serverAPI.callPluginMethod<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status", {}).then((res) => {
+      if (res.success && mounted) setUpdateInfo(res.result);
+    });
+
     return () => {
       mounted = false;
     };
