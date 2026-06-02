@@ -7,13 +7,9 @@ import {
   DropdownItem,
   staticClasses,
 } from "@decky/ui";
-import {
-  callable,
-  definePlugin,
-  routerHook,
-  toaster,
-} from "@decky/api";
-import { useEffect, useState } from "react";
+import { callable, definePlugin, routerHook, toaster } from "@decky/api";
+import { useEffect, useState, Component, ReactNode, ErrorInfo } from "react";
+import { reportError } from "./errorReporter";
 import { FaFlag } from "react-icons/fa";
 import {
   startSteamUiInjection,
@@ -38,7 +34,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   overlayOpacity: 0.35,
   showBadges: true,
   remoteDatabaseEnabled: true,
-  remoteDatabaseUrl: "https://hrai-decky-default-rtdb.europe-west1.firebasedatabase.app/",
+  remoteDatabaseUrl: "https://api.varta.games/public",
   libraryBadgePosition: "bottom-right",
   libraryBadgeStyle: "text",
   language: "uk",
@@ -52,6 +48,7 @@ const getSettings = callable<[], PluginSettings>("get_settings");
 const saveSettings = callable<[{settings: PluginSettings}], PluginSettings>("save_settings");
 const setSetting = callable<[{key: string, value: any}], PluginSettings>("set_setting");
 const refreshDatabase = callable<[force: boolean], DatabaseStats>("refresh_database");
+const getUpdateStatus = callable<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status");
 const getDatabaseStats = callable<[], DatabaseStats>("get_database_stats");
 
 function getColorOptions(lang: "uk" | "en") {
@@ -86,6 +83,10 @@ function getStyleOptions(lang: "uk" | "en") {
 
 const BACKEND_TIMEOUT_MS = 5000;
 let activeSettings = getLocalSettings();
+if (activeSettings.remoteDatabaseUrl && activeSettings.remoteDatabaseUrl.includes("firebase")) {
+  activeSettings.remoteDatabaseUrl = "https://api.varta.games/public";
+  saveLocalSettings(activeSettings);
+}
 let fetchedFromPython = false;
 
 function Content() {
@@ -94,8 +95,7 @@ function Content() {
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<DatabaseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
-
-
+  const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -160,6 +160,10 @@ function Content() {
       .catch((err) => {
         if (mounted) setStatsError(String(err));
       });
+
+    getUpdateStatus().then((res) => {
+      if (mounted) setUpdateInfo(res);
+    });
 
     return () => {
       mounted = false;
@@ -354,6 +358,19 @@ function Content() {
       </PanelSection>
 
       <WishlistScanner getAppStatus={getResolvedAppStatus} lang={lang} />
+
+      {updateInfo?.hasUpdate && (
+        <PanelSection>
+          <div style={{ background: "rgba(39, 174, 96, 0.15)", border: "1px solid rgba(39, 174, 96, 0.4)", padding: "12px", borderRadius: "8px", marginTop: "16px", textAlign: "center" }}>
+            <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "4px" }}>
+              Доступна нова версія: {updateInfo.latestVersion}
+            </div>
+            <div style={{ color: "#ccc", fontSize: "12px" }}>
+              Оновіть плагін через GitHub
+            </div>
+          </div>
+        </PanelSection>
+      )}
     </>
   );
 }
@@ -366,6 +383,23 @@ const fieldStyle = {
   fontSize: "13px",
 } as const;
 
+class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    reportError(error, `React ErrorBoundary: \n${errorInfo.componentStack}`);
+  }
+  render() {
+    if (this.state.hasError) return <div style={{padding: "10px", color: "#e74c3c"}}>VARTA UI Crashed. Check Sentry logs.</div>;
+    return this.props.children;
+  }
+}
+
 export default definePlugin(() => {
   console.log("[VARTA] initializing");
 
@@ -376,7 +410,7 @@ export default definePlugin(() => {
   return {
     name: "VARTA",
     titleView: <div className={staticClasses.Title}>VARTA</div>,
-    content: <Content />,
+    content: <ErrorBoundary><Content /></ErrorBoundary>,
     icon: <FaFlag />,
     onDismount() {
       routerHook.removePatch("/library/app/:appid", libraryPatch);

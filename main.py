@@ -5,6 +5,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import decky
 try:
     import ssl
@@ -23,7 +24,7 @@ DEFAULT_SETTINGS = {
     "overlayOpacity": 0.35,
     "showBadges": True,
     "remoteDatabaseEnabled": True,
-    "remoteDatabaseUrl": "https://hrai-decky-default-rtdb.europe-west1.firebasedatabase.app/",
+    "remoteDatabaseUrl": "https://api.varta.games/public",
     "libraryBadgePosition": "bottom-right",
     "libraryBadgeStyle": "text",
     "language": "uk",
@@ -42,7 +43,9 @@ class Plugin:
             await self._ensure_loaded()
         except Exception as e:
             import traceback
-            decky.logger.error(f"VARTA _main error:\n{traceback.format_exc()}")
+            err = traceback.format_exc()
+            decky.logger.error(f"VARTA _main error:\n{err}")
+            self._send_sentry_event(f"Init error: {e}", exc_info=err)
 
     async def _ensure_loaded(self):
         if getattr(self, "_loaded", False):
@@ -65,6 +68,11 @@ class Plugin:
                 self._settings = self._load_json(self._settings_path, DEFAULT_SETTINGS)
                 self._is_fresh = False
             
+            # Force migration
+            if "firebase" in str(self._settings.get("remoteDatabaseUrl", "")).lower():
+                self._settings["remoteDatabaseUrl"] = "https://api.varta.games/public"
+                self._save_json(self._settings_path, self._settings)
+            
             self._cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json")
             self._db_cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "database-cache.json")
             self._etags_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "etags.json")
@@ -86,7 +94,9 @@ class Plugin:
             asyncio.create_task(self._auto_refresh_loop())
             asyncio.create_task(self._cache_saver_loop())
         except Exception as e:
-            decky.logger.error(f"Failed to load Ne Hrai SD backend: {e}")
+            import traceback
+            decky.logger.error(f"Failed to load VARTA backend: {e}")
+            self._send_sentry_event(f"Load error: {e}", exc_info=traceback.format_exc())
             raise
         finally:
             self._loading = False
@@ -123,6 +133,7 @@ class Plugin:
             import traceback
             err_trace = traceback.format_exc()
             decky.logger.error(f"VARTA get_database_stats error:\n{err_trace}")
+            self._send_sentry_event(f"DB Stats error: {e}", exc_info=err_trace)
             return {"error": err_trace}
 
     async def _auto_refresh_loop(self):
@@ -199,6 +210,50 @@ class Plugin:
         await self._ensure_loaded()
         await self._refresh_database(force=force)
         return await self.get_database_stats()
+
+    def _parse_version(self, v_str):
+        v_str = str(v_str).lstrip('v')
+        parts = v_str.split('-', 1)
+        main_parts = parts[0].split('.')
+        try:
+            major = int(main_parts[0]) if len(main_parts) > 0 else 0
+            minor = int(main_parts[1]) if len(main_parts) > 1 else 0
+            patch = int(main_parts[2]) if len(main_parts) > 2 else 0
+        except ValueError:
+            return (0, 0, 0, 0)
+        weight = 1 if len(parts) > 1 and 'testing' in parts[1] else 2
+        return (major, minor, patch, weight)
+
+    async def get_update_status(self):
+        await self._ensure_loaded()
+        now = time.time()
+        if now - getattr(self, "_update_checked_at", 0) < 3600:
+            return getattr(self, "_update_info", {"hasUpdate": False, "latestVersion": ""})
+
+        self._update_checked_at = now
+        info = {"hasUpdate": False, "latestVersion": ""}
+
+        def _check():
+            try:
+                pkg_path = os.path.join(self._plugin_dir, "package.json")
+                with open(pkg_path, "r", encoding="utf-8") as f:
+                    current = json.load(f).get("version", "0.0.0")
+
+                req = urllib.request.Request("https://api.github.com/repos/HARd/varta-decky/releases", headers={"User-Agent": "varta-decky/1.0"})
+                with urllib.request.urlopen(req, timeout=10, context=SSL_CONTEXT) as response:
+                    if response.getcode() == 200:
+                        releases = json.loads(response.read().decode("utf-8"))
+                        if releases:
+                            latest = releases[0].get("tag_name", "").lstrip("v")
+                            if self._parse_version(latest) > self._parse_version(current):
+                                info["hasUpdate"] = True
+                                info["latestVersion"] = latest
+            except Exception as e:
+                decky.logger.error(f"Failed to check for updates: {e}")
+            return info
+
+        self._update_info = await asyncio.get_event_loop().run_in_executor(None, _check)
+        return self._update_info
 
     async def get_cef_debugger_url(self):
         import os
@@ -312,17 +367,26 @@ class Plugin:
 
     async def report_game(self, payload):
         await self._ensure_loaded()
-        url = payload.get("url")
-        data = payload.get("data")
-        method = payload.get("method", "POST")
-        if not url or not data:
+        url = "https://api.varta.games/public/reports"
+        raw_data = payload.get("data", {})
+        if not raw_data:
             return False
+            
+        data = {
+            "name": raw_data.get("name", "Unknown Game"),
+            "developer": raw_data.get("developer", ""),
+            "steamAppId": str(raw_data.get("appid", ""))
+        }
 
         def _send():
             try:
-                req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers={"Content-Type": "application/json"}, method=method)
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "varta-decky/1.0"
+                }
+                req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, timeout=12, context=SSL_CONTEXT) as response:
-                    return response.getcode() == 200
+                    return response.getcode() in (200, 201, 202, 204)
             except Exception as e:
                 decky.logger.error(f"Failed to report game: {e}")
                 return False
@@ -394,7 +458,7 @@ class Plugin:
                 self._remote_database_error = None
                 return
 
-            url = self._firebase_json_url(remote_url)
+            url = self._clean_api_url(remote_url)
             fresh = (
                 not force
                 and self._database_source == "remote"
@@ -406,8 +470,7 @@ class Plugin:
 
             try:
                 loop = asyncio.get_event_loop()
-                base_url = url.split(".json")[0].rstrip("/")
-                fetch_args = (base_url, self._etags.copy(), self._database)
+                fetch_args = (url, self._etags.copy(), self._database)
                 remote_database, new_etags = await loop.run_in_executor(None, self._fetch_remote_database, *fetch_args)
                 self._etags = new_etags
                 self._set_database(remote_database, "remote", url)
@@ -434,7 +497,7 @@ class Plugin:
         updated_etags = etags.copy()
         
         def fetch_node(node, default_value):
-            req = urllib.request.Request(f"{base_url}/{node}.json", headers={"User-Agent": "varta-decky/0.2"})
+            req = urllib.request.Request(f"{base_url}/{node}.json", headers={"User-Agent": "varta-decky/1.0"})
             if node in updated_etags:
                 req.add_header("If-None-Match", updated_etags[node])
             try:
@@ -442,7 +505,8 @@ class Plugin:
                     etag = response.headers.get("ETag")
                     if etag:
                         updated_etags[node] = etag
-                    return json.loads(response.read().decode("utf-8")) or default_value
+                    data = json.loads(response.read().decode("utf-8"))
+                    return data if data is not None else default_value
             except urllib.error.HTTPError as e:
                 if e.code == 304:
                     return existing_db.get(node, default_value)
@@ -452,41 +516,23 @@ class Plugin:
 
         hostile = fetch_node("hostile", [])
         ukrainian = fetch_node("ukrainian", [])
-        version = fetch_node("version", "remote")
-        reports = fetch_node("reports", {})
-        
-        report_appids = []
-        if isinstance(reports, dict):
-            for k, v in reports.items():
-                if isinstance(v, dict) and "appid" in v:
-                    report_appids.append(str(v["appid"]))
+        reports = fetch_node("reports", [])
         
         if not isinstance(hostile, list) or not isinstance(ukrainian, list):
             raise ValueError("Remote database must contain hostile[] and ukrainian[] arrays")
 
+        report_appids = [str(r) for r in reports if isinstance(r, (str, int))]
+
         return {
-            "version": str(version if isinstance(version, str) else "remote"),
-            "source": "Firebase Realtime Database",
-            "hostile": [name for name in hostile if isinstance(name, str)],
-            "ukrainian": [name for name in ukrainian if isinstance(name, str)],
+            "version": "1.0.1",
+            "source": "VARTA API",
+            "hostile": [str(name) for name in hostile],
+            "ukrainian": [str(name) for name in ukrainian],
             "reports": report_appids,
         }, updated_etags
 
-    def _firebase_json_url(self, url):
-        clean_url = url.split("#", 1)[0].strip()
-        if clean_url.endswith(".json") or ".json?" in clean_url:
-            return clean_url
-        parsed = urllib.parse.urlparse(clean_url)
-        path = parsed.path.rstrip("/")
-        json_path = f"{path}.json" if path else "/.json"
-        return urllib.parse.urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            json_path,
-            "",
-            parsed.query,
-            "",
-        ))
+    def _clean_api_url(self, url):
+        return url.strip().rstrip("/")
 
     def _load_json(self, path, fallback):
         try:
@@ -511,4 +557,43 @@ class Plugin:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._save_json, self._cache_path, self._cache)
 
+    async def report_frontend_error(self, message, stack=""):
+        decky.logger.error(f"Frontend Error: {message}\n{stack}")
+        try:
+            self._send_sentry_event(message, exc_info=stack, extra_tags={"source": "frontend"})
+        except Exception:
+            pass
+        return True
 
+    def _send_sentry_event(self, message, exc_info=None, extra_tags=None):
+        try:
+            url = "https://o426573.ingest.us.sentry.io/api/4511482012762112/store/"
+            payload = {
+                "event_id": uuid.uuid4().hex,
+                "timestamp": int(time.time()),
+                "level": "error",
+                "logger": "varta-decky",
+                "platform": "python",
+                "message": str(message)[:1000],
+                "tags": {"source": "backend"}
+            }
+            if extra_tags:
+                payload["tags"].update(extra_tags)
+                
+            if exc_info:
+                payload["exception"] = {
+                    "values": [{
+                        "type": "Exception",
+                        "value": str(exc_info)[:2000],
+                    }]
+                }
+                
+            headers = {
+                "Content-Type": "application/json",
+                "X-Sentry-Auth": "Sentry sentry_version=7, sentry_key=b8414e0a5fa8cc6fce67a6daafe48f37, sentry_client=varta-decky/1.0"
+            }
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=5, context=SSL_CONTEXT) as response:
+                pass
+        except Exception as e:
+            decky.logger.warning(f"Failed to send Sentry event: {e}")
