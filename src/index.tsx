@@ -82,6 +82,10 @@ function getStyleOptions(lang: "uk" | "en") {
 
 const BACKEND_TIMEOUT_MS = 5000;
 let activeSettings = getLocalSettings();
+if (activeSettings.remoteDatabaseUrl && activeSettings.remoteDatabaseUrl.includes("firebase")) {
+  activeSettings.remoteDatabaseUrl = "https://api.varta.games/public";
+  saveLocalSettings(activeSettings);
+}
 let fetchedFromPython = false;
 
 function Content() {

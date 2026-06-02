@@ -68,6 +68,11 @@ class Plugin:
                 self._settings = self._load_json(self._settings_path, DEFAULT_SETTINGS)
                 self._is_fresh = False
             
+            # Force migration
+            if "firebase" in str(self._settings.get("remoteDatabaseUrl", "")).lower():
+                self._settings["remoteDatabaseUrl"] = "https://api.varta.games/public"
+                self._save_json(self._settings_path, self._settings)
+            
             self._cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json")
             self._db_cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "database-cache.json")
             self._etags_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "etags.json")
