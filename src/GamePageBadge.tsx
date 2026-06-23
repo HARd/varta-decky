@@ -66,6 +66,7 @@ export default function GamePageBadge({ lookup, getSettings, placement = "librar
   return (
     <div style={containerStyle}>
       <div style={{ ...badgeStyle, backgroundColor: color }}>
+        <img src={iconSrc} alt="icon" style={{ height: "16px", width: "auto", display: "block" }} />
         <strong>{label}</strong>
         {matches && <span style={matchStyle}>{matches}</span>}
       </div>
