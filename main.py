@@ -531,6 +531,9 @@ class Plugin:
         hostile = fetch_node("hostile", [])
         ukrainian = fetch_node("ukrainian", [])
         reports = fetch_node("reports", [])
+        version_data = fetch_node("version", {"version": "1.0.1"})
+        
+        version_string = version_data.get("version", "1.0.1") if isinstance(version_data, dict) else "1.0.1"
         
         if not isinstance(hostile, list) or not isinstance(ukrainian, list):
             raise ValueError("Remote database must contain hostile[] and ukrainian[] arrays")
@@ -538,7 +541,7 @@ class Plugin:
         report_appids = [str(r) for r in reports if isinstance(r, (str, int))]
 
         return {
-            "version": "1.0.1",
+            "version": version_string,
             "source": "VARTA API",
             "hostile": [str(name) for name in hostile],
             "ukrainian": [str(name) for name in ukrainian],
