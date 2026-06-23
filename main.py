@@ -484,7 +484,11 @@ class Plugin:
 
             try:
                 loop = asyncio.get_event_loop()
-                fetch_args = (url, self._etags.copy(), self._database)
+                current_etags = self._etags.copy()
+                if self._database.get("version") == "1.0.1" and "version" in current_etags:
+                    del current_etags["version"]
+                    
+                fetch_args = (url, current_etags, self._database)
                 remote_database, new_etags = await loop.run_in_executor(None, self._fetch_remote_database, *fetch_args)
                 self._etags = new_etags
                 self._set_database(remote_database, "remote", url)
@@ -531,9 +535,14 @@ class Plugin:
         hostile = fetch_node("hostile", [])
         ukrainian = fetch_node("ukrainian", [])
         reports = fetch_node("reports", [])
-        version_data = fetch_node("version", {"version": "1.0.1"})
+        version_data = fetch_node("version", None)
         
-        version_string = version_data.get("version", "1.0.1") if isinstance(version_data, dict) else "1.0.1"
+        if isinstance(version_data, dict):
+            version_string = str(version_data.get("version", "1.0.1"))
+        elif isinstance(version_data, str):
+            version_string = version_data
+        else:
+            version_string = "1.0.1"
         
         if not isinstance(hostile, list) or not isinstance(ukrainian, list):
             raise ValueError("Remote database must contain hostile[] and ukrainian[] arrays")
