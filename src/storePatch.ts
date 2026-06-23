@@ -3,6 +3,7 @@ import { findModuleExport } from "@decky/ui";
 import type { AppStatus, PluginSettings } from "./types";
 import { t } from "./i18n";
 import { reportError } from "./errorReporter";
+import { UkrStoreIcon, HostileStoreIcon } from "./icons";
 
 type Lookup = (appid: string) => Promise<AppStatus>;
 type SettingsGetter = () => PluginSettings;
@@ -55,6 +56,8 @@ function getBadgePayload(status: AppStatus, settings: PluginSettings) {
     background: isHostile ? settings.hostileColor : settings.ukrainianColor,
     border: isHostile ? "rgba(255, 190, 190, .65)" : "rgba(200, 255, 220, .65)",
     shadow: isHostile ? "rgba(122, 42, 42, .45)" : "rgba(39, 174, 96, .38)",
+    isIcon: settings.libraryBadgeStyle === "icon",
+    iconSrc: isHostile ? HostileStoreIcon : UkrStoreIcon,
   };
 }
 
@@ -187,6 +190,29 @@ async function injectBadgeIntoStore(appid: string) {
             
             console.debug("VARTA_REPORT:" + JSON.stringify({ data: data }));
           };
+
+          document.body.appendChild(badge);
+        })();
+      `;
+    } else if (payload.isIcon) {
+      script = `
+        (function() {
+          var existing = document.getElementById('varta-store-badge');
+          if (existing) existing.remove();
+
+          var badge = document.createElement('img');
+          badge.id = 'varta-store-badge';
+          badge.src = ${JSON.stringify(payload.iconSrc)};
+          badge.style.cssText = [
+            'position: fixed',
+            'left: 22px',
+            'bottom: 22px',
+            'z-index: 999999',
+            'width: 200px',
+            'height: auto',
+            'pointer-events: none',
+            'filter: drop-shadow(0 10px 28px rgba(0,0,0,0.5))'
+          ].join(';');
 
           document.body.appendChild(badge);
         })();
