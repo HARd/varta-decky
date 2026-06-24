@@ -485,7 +485,9 @@ class Plugin:
             try:
                 loop = asyncio.get_event_loop()
                 current_etags = self._etags.copy()
-                if self._database.get("version") == "1.0.1" and "version" in current_etags:
+                if force:
+                    current_etags = {}
+                elif self._database.get("version") == "1.0.1" and "version" in current_etags:
                     del current_etags["version"]
                     
                 fetch_args = (url, current_etags, self._database)
