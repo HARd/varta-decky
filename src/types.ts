@@ -15,6 +15,8 @@ export interface PluginSettings {
   showReportButton: boolean;
   lastSeenHostileCount: number;
   lastSeenUkrCount: number;
+  analyticsEnabled: boolean;
+  analyticsId: string;
 }
 
 export interface AppStatus {

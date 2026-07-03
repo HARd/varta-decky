@@ -7,8 +7,11 @@ import {
 } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { FC, useState } from "react";
+import { callable } from "@decky/api";
 import { AppStatus } from "./types";
 import { t, Language } from "./i18n";
+
+const trackEvent = callable<[event: string, properties?: Record<string, any>], boolean>("track_event");
 
 interface WishlistScannerProps {
   getAppStatus: (appid: string) => Promise<AppStatus>;
@@ -104,6 +107,10 @@ export const WishlistScanner: FC<WishlistScannerProps> = ({ getAppStatus, lang }
       }
       
       setScanComplete(true);
+      void trackEvent("wishlist_scanned", {
+        total: appids.length,
+        hostile_found: foundHostiles.length,
+      }).catch(() => {});
     } catch (e) {
       console.error("Failed to scan wishlist", e);
     } finally {

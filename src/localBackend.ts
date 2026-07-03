@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS: PluginSettings = {
   showReportButton: true,
   lastSeenHostileCount: 0,
   lastSeenUkrCount: 0,
+  analyticsEnabled: true,
+  analyticsId: "",
 };
 
 const SETTINGS_KEY = "varta-settings";

@@ -41,6 +41,8 @@ const DEFAULT_SETTINGS: PluginSettings = {
   showReportButton: true,
   lastSeenHostileCount: 0,
   lastSeenUkrCount: 0,
+  analyticsEnabled: true,
+  analyticsId: "",
 };
 
 const getAppStatus = callable<[appid: string], AppStatus>("get_app_status");
@@ -50,6 +52,7 @@ const setSetting = callable<[{key: string, value: any}], PluginSettings>("set_se
 const refreshDatabase = callable<[force: boolean], DatabaseStats>("refresh_database");
 const getUpdateStatus = callable<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status");
 const getDatabaseStats = callable<[], DatabaseStats>("get_database_stats");
+const trackEvent = callable<[event: string, properties?: Record<string, any>], boolean>("track_event");
 
 function getColorOptions(lang: "uk" | "en") {
   return [
@@ -111,6 +114,7 @@ function Content() {
           let merged: PluginSettings;
           if (loadedSettings && (loadedSettings as any)._is_fresh) {
             // Backend is fresh (e.g. after reinstall), push local settings to backend
+            activeSettings.analyticsId = loadedSettings.analyticsId;
             merged = activeSettings;
             void saveSettings({ settings: merged });
           } else {
@@ -181,6 +185,12 @@ function Content() {
     refreshStorePatch();
     window.dispatchEvent(new CustomEvent("varta-settings-changed"));
     
+    // Track settings_changed (skip internal/counter fields)
+    const skipKeys = new Set(["lastSeenHostileCount", "lastSeenUkrCount", "analyticsId"]);
+    if (!skipKeys.has(key as string)) {
+      void trackEvent("settings_changed", { key: key as string, value: String(value) }).catch(() => {});
+    }
+
     // Auto-save to Python backend in the background
     void setSetting({ key: key as string, value })
       .catch((e) => {
@@ -353,6 +363,14 @@ function Content() {
             rgOptions={getStyleOptions(lang)}
             selectedOption={settings.libraryBadgeStyle}
             onChange={(option) => updateSetting("libraryBadgeStyle", option.data as PluginSettings["libraryBadgeStyle"])}
+          />
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ToggleField
+            label={t(lang, "menu_analytics")}
+            description={t(lang, "menu_analytics_desc")}
+            checked={settings.analyticsEnabled}
+            onChange={(checked) => updateSetting("analyticsEnabled", checked)}
           />
         </PanelSectionRow>
       </PanelSection>

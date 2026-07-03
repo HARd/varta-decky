@@ -59,6 +59,8 @@ export const i18n = {
     wishlist_found: "Знайдено ворожих ігор: {c}",
     wishlist_remove: "Видалити знайдені ігри",
     wishlist_removing: "Видалення...",
+    menu_analytics: "Анонімна аналітика",
+    menu_analytics_desc: "Надсилати анонімну статистику використання",
   },
   en: {
     menu_hostile_dev: "Mark hostile developers",
@@ -118,11 +120,13 @@ export const i18n = {
     wishlist_found: "Found {c} hostile games",
     wishlist_remove: "Remove found games",
     wishlist_removing: "Removing...",
+    menu_analytics: "Anonymous analytics",
+    menu_analytics_desc: "Send anonymous usage statistics",
   }
-};
+} as const;
 
 export function t(lang: Language, key: keyof typeof i18n["uk"], vars?: Record<string, string | number>) {
-  let str = i18n[lang]?.[key] || i18n["en"][key] || key;
+  let str: string = i18n[lang]?.[key] || i18n["en"][key] || key;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       str = str.replace(`{${k}}`, String(v));

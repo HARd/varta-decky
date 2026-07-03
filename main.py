@@ -31,6 +31,8 @@ DEFAULT_SETTINGS = {
     "showReportButton": True,
     "lastSeenHostileCount": 0,
     "lastSeenUkrCount": 0,
+    "analyticsEnabled": True,
+    "analyticsId": "",
 }
 
 CACHE_TTL_SECONDS = 60 * 60 * 24 * 14
@@ -74,25 +76,57 @@ class Plugin:
                 self._save_json(self._settings_path, self._settings)
             
             self._cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json")
-            self._db_cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "database-cache.json")
-            self._etags_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "etags.json")
+            # Use SETTINGS_DIR for db cache + etags — survives Decky updates
+            self._db_cache_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "database-cache.json")
+            self._etags_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "etags.json")
+            self._db_meta_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "database-meta.json")
             self._lock = asyncio.Lock()
             self._database = self._load_database()
             self._cache = self._load_json(self._cache_path, {})
             self._etags = self._load_json(self._etags_path, {})
-            self._database_source = "bundled"
-            self._remote_database_url = ""
-            self._remote_database_fetched_at = 0
             self._remote_database_error = None
-            self._set_database(self._database, "bundled", "")
+
+            # Restore persisted meta (source, url, fetched_at) so Decky restarts
+            # don't force a redundant full re-fetch when the cache is already fresh.
+            db_meta = self._load_json(self._db_meta_path, {})
+            cached_url = db_meta.get("url", "")
+            cached_fetched_at = db_meta.get("fetched_at", 0)
+            configured_url = self._clean_api_url(str(self._settings.get("remoteDatabaseUrl", "")).strip())
+
+            if (
+                db_meta.get("source") == "remote"
+                and cached_url == configured_url
+                and cached_fetched_at > 0
+                and "hostile" in self._database
+            ):
+                self._database_source = "remote"
+                self._remote_database_url = cached_url
+                self._remote_database_fetched_at = cached_fetched_at
+                self._set_database(self._database, "remote", cached_url)
+            else:
+                self._database_source = "bundled"
+                self._remote_database_url = ""
+                self._remote_database_fetched_at = 0
+                self._set_database(self._database, "bundled", "")
 
             self._loaded = True
             self._cache_dirty = False
             decky.logger.info(f"VARTA loaded {len(self._hostile_set)} hostile and {len(self._ukrainian_set)} Ukrainian entries")
 
+            # Ensure a stable analytics ID exists
+            if not self._settings.get("analyticsId"):
+                self._settings["analyticsId"] = str(uuid.uuid4())
+                self._save_json(self._settings_path, self._settings)
+
             asyncio.create_task(self._refresh_database())
             asyncio.create_task(self._auto_refresh_loop())
             asyncio.create_task(self._cache_saver_loop())
+            self._send_posthog("plugin_loaded", {
+                "db_version": self._database.get("version", "unknown"),
+                "hostile_count": len(self._hostile_set),
+                "ukrainian_count": len(self._ukrainian_set),
+                "db_source": self._database_source,
+            })
         except Exception as e:
             import traceback
             decky.logger.error(f"Failed to load VARTA backend: {e}")
@@ -164,6 +198,11 @@ class Plugin:
             settings = settings["settings"]
             
         sanitized = {**DEFAULT_SETTINGS, **settings}
+        
+        # Prevent overwriting a valid analyticsId with an empty string from the frontend
+        if not sanitized.get("analyticsId") and self._settings.get("analyticsId"):
+            sanitized["analyticsId"] = self._settings.get("analyticsId")
+            
         try:
             sanitized["overlayOpacity"] = min(1.0, max(0.05, float(sanitized.get("overlayOpacity", 0.35))))
         except Exception:
@@ -189,6 +228,11 @@ class Plugin:
     async def set_setting(self, key, value):
         decky.logger.info(f"set_setting: {key} = {value}")
         await self._ensure_loaded()
+        
+        # Prevent overwriting a valid analyticsId with an empty string
+        if key == "analyticsId" and not value and self._settings.get("analyticsId"):
+            return self._settings
+            
         self._settings[key] = value
         
         try:
@@ -209,7 +253,14 @@ class Plugin:
     async def refresh_database(self, force=True):
         await self._ensure_loaded()
         await self._refresh_database(force=force)
-        return await self.get_database_stats()
+        stats = await self.get_database_stats()
+        self._send_posthog("database_refreshed", {
+            "forced": bool(force),
+            "db_version": stats.get("version", "unknown"),
+            "hostile_count": stats.get("hostileCount", 0),
+            "ukrainian_count": stats.get("ukrainianCount", 0),
+        })
+        return stats
 
     def _parse_version(self, v_str):
         v_str = str(v_str).lstrip('v')
@@ -405,7 +456,12 @@ class Plugin:
                 decky.logger.error(f"Failed to report game: {e}")
                 return False
 
-        return await asyncio.get_event_loop().run_in_executor(None, _send)
+        success = await asyncio.get_event_loop().run_in_executor(None, _send)
+        if success:
+            self._send_posthog("game_reported", {
+                "appid": str(raw_data.get("appid", "")),
+            })
+        return success
 
     def _fetch_appdetails(self, appid):
         url = f"https://store.steampowered.com/api/appdetails?appids={appid}"
@@ -498,6 +554,12 @@ class Plugin:
                 self._remote_database_error = None
                 await loop.run_in_executor(None, self._save_json, self._db_cache_path, remote_database)
                 await loop.run_in_executor(None, self._save_json, self._etags_path, self._etags)
+                await loop.run_in_executor(None, self._save_json, self._db_meta_path, {
+                    "source": "remote",
+                    "url": url,
+                    "fetched_at": self._remote_database_fetched_at,
+                    "version": remote_database.get("version", "unknown"),
+                })
             except Exception as exc:
                 decky.logger.warning("Failed to fetch remote database: %s", exc)
                 self._remote_database_error = str(exc)
@@ -592,6 +654,48 @@ class Plugin:
         except Exception:
             pass
         return True
+
+    # ── Analytics ────────────────────────────────────────────────────────────
+
+    async def track_event(self, event, properties=None):
+        """Called from the frontend to fire a PostHog event."""
+        await self._ensure_loaded()
+        self._send_posthog(event, properties or {})
+        return True
+
+    def _send_posthog(self, event, properties=None):
+        """Fire-and-forget PostHog capture. Skipped when analyticsEnabled is False."""
+        try:
+            if not self._settings.get("analyticsEnabled", True):
+                return
+            distinct_id = self._settings.get("analyticsId") or "unknown"
+            payload = {
+                "api_key": "phc_B2ercmwcgojA4buu6vzghzsY3F6HtdFUug8LeeZK6iwL",
+                "event": event,
+                "properties": {
+                    "distinct_id": distinct_id,
+                    "client": "decky-plugin",
+                    **(properties or {}),
+                },
+            }
+
+            def _do_send():
+                try:
+                    req = urllib.request.Request(
+                        "https://eu.i.posthog.com/capture/",
+                        data=json.dumps(payload).encode("utf-8"),
+                        headers={"Content-Type": "application/json", "User-Agent": "varta-decky/1.0"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=5, context=SSL_CONTEXT):
+                        pass
+                except Exception as e:
+                    decky.logger.debug(f"PostHog send failed for '{event}': {e}")
+
+            import threading
+            threading.Thread(target=_do_send, daemon=True).start()
+        except Exception as e:
+            decky.logger.debug(f"PostHog setup failed: {e}")
 
     def _send_sentry_event(self, message, exc_info=None, extra_tags=None):
         try:
