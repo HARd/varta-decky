@@ -61,6 +61,10 @@ export const i18n = {
     wishlist_removing: "Видалення...",
     menu_analytics: "Анонімна аналітика",
     menu_analytics_desc: "Надсилати анонімну статистику використання",
+    update_available: "Доступне оновлення: ",
+    update_downloading: "Завантаження та встановлення...",
+    update_failed: "Помилка оновлення",
+    update_success: "✅ Оновлення встановлено! Будь ласка, перезапустіть Steam Deck (або Decky Loader) щоб застосувати зміни.",
   },
   en: {
     menu_hostile_dev: "Mark hostile developers",
@@ -122,6 +126,10 @@ export const i18n = {
     wishlist_removing: "Removing...",
     menu_analytics: "Anonymous analytics",
     menu_analytics_desc: "Send anonymous usage statistics",
+    update_available: "Update Available: ",
+    update_downloading: "Downloading and installing...",
+    update_failed: "Update failed",
+    update_success: "✅ Update installed! Please restart your Steam Deck (or Decky Loader) to apply changes.",
   }
 } as const;
 

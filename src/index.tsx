@@ -51,6 +51,7 @@ const saveSettings = callable<[{settings: PluginSettings}], PluginSettings>("sav
 const setSetting = callable<[{key: string, value: any}], PluginSettings>("set_setting");
 const refreshDatabase = callable<[force: boolean], DatabaseStats>("refresh_database");
 const getUpdateStatus = callable<[], { hasUpdate: boolean; latestVersion: string }>("get_update_status");
+const applyUpdate = callable<[], { success: boolean; error?: string }>("apply_update");
 const getDatabaseStats = callable<[], DatabaseStats>("get_database_stats");
 const trackEvent = callable<[event: string, properties?: Record<string, any>], boolean>("track_event");
 
@@ -99,6 +100,9 @@ function Content() {
   const [db, setDb] = useState<DatabaseStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ hasUpdate: boolean; latestVersion: string } | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -379,13 +383,48 @@ function Content() {
 
       {updateInfo?.hasUpdate && (
         <PanelSection>
-          <div style={{ background: "rgba(39, 174, 96, 0.15)", border: "1px solid rgba(39, 174, 96, 0.4)", padding: "12px", borderRadius: "8px", marginTop: "16px", textAlign: "center" }}>
-            <div style={{ color: "#fff", fontWeight: "bold", marginBottom: "4px" }}>
-              Доступна нова версія: {updateInfo.latestVersion}
+          <div style={{ background: "rgba(39, 174, 96, 0.15)", border: "1px solid rgba(39, 174, 96, 0.4)", padding: "12px", borderRadius: "8px", marginTop: "16px", textAlign: "center", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ color: "#fff", fontWeight: "bold" }}>
+              {t(lang, "update_available")}{updateInfo.latestVersion}
             </div>
-            <div style={{ color: "#ccc", fontSize: "12px" }}>
-              Оновіть плагін через GitHub
-            </div>
+            
+            {updateError && (
+              <div style={{ color: "#e74c3c", fontSize: "12px", padding: "4px" }}>
+                {t(lang, "update_failed")}: {updateError}
+              </div>
+            )}
+            
+            {updateSuccess && (
+              <div style={{ color: "#2ecc71", fontSize: "13px", padding: "8px", background: "rgba(46, 204, 113, 0.1)", borderRadius: "6px" }}>
+                {t(lang, "update_success")}
+              </div>
+            )}
+            
+            {!updateSuccess && (
+              <ButtonItem
+                layout="below"
+                onClick={async () => {
+                  setIsUpdating(true);
+                  setUpdateError(null);
+                  try {
+                    const res = await applyUpdate();
+                    if (!res.success) {
+                      setUpdateError(res.error || "Unknown error");
+                      setIsUpdating(false);
+                    } else {
+                      setUpdateSuccess(true);
+                      setIsUpdating(false);
+                    }
+                  } catch (e: any) {
+                    setUpdateError(e.message || "Unknown error");
+                    setIsUpdating(false);
+                  }
+                }}
+                disabled={isUpdating}
+              >
+                {isUpdating ? t(lang, "update_downloading") : "Оновити / Update"}
+              </ButtonItem>
+            )}
           </div>
         </PanelSection>
       )}

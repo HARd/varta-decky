@@ -282,7 +282,7 @@ class Plugin:
             return getattr(self, "_update_info", {"hasUpdate": False, "latestVersion": ""})
 
         self._update_checked_at = now
-        info = {"hasUpdate": False, "latestVersion": ""}
+        info = {"hasUpdate": False, "latestVersion": "", "downloadUrl": ""}
 
         def _check():
             try:
@@ -300,14 +300,20 @@ class Plugin:
                         latest = None
                         for r in releases:
                             tag = r.get("tag_name", "").lstrip("v")
+                            is_match = False
                             if current_is_stable and "stable" in tag.lower():
-                                latest = tag
-                                break
+                                is_match = True
                             elif current_is_testing and "testing" in tag.lower():
-                                latest = tag
-                                break
+                                is_match = True
                             elif not current_is_stable and not current_is_testing:
+                                is_match = True
+                                
+                            if is_match:
                                 latest = tag
+                                for asset in r.get("assets", []):
+                                    if asset.get("name", "").endswith(".zip"):
+                                        info["downloadUrl"] = asset.get("browser_download_url", "")
+                                        break
                                 break
 
                         if latest and self._parse_version(latest) > self._parse_version(current):
@@ -319,6 +325,67 @@ class Plugin:
 
         self._update_info = await asyncio.get_event_loop().run_in_executor(None, _check)
         return self._update_info
+
+    async def apply_update(self):
+        await self._ensure_loaded()
+        info = getattr(self, "_update_info", {})
+        url = info.get("downloadUrl")
+        if not url:
+            return {"success": False, "error": "No download URL found"}
+            
+        def _do_update():
+            import subprocess
+            import shutil
+            import uuid
+            try:
+                update_id = str(uuid.uuid4())
+                zip_path = f"/tmp/varta-update-{update_id}.zip"
+                extract_path = f"/tmp/varta-update-extract-{update_id}"
+                
+                decky.logger.info(f"Downloading update from {url}")
+                req = urllib.request.Request(url, headers={"User-Agent": "varta-decky/1.0"})
+                with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as response, open(zip_path, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
+                    
+                if os.path.exists(extract_path):
+                    shutil.rmtree(extract_path)
+                os.makedirs(extract_path, exist_ok=True)
+                
+                decky.logger.info("Extracting update zip")
+                subprocess.check_call(["unzip", "-o", zip_path, "-d", extract_path])
+                
+                extracted_dirs = [d for d in os.listdir(extract_path) if os.path.isdir(os.path.join(extract_path, d))]
+                if not extracted_dirs:
+                    raise Exception("No directory inside zip")
+                    
+                source_dir = os.path.join(extract_path, extracted_dirs[0])
+                decky.logger.info(f"Copying files from {source_dir} to {self._plugin_dir}")
+                
+                # Copy files one by one, removing the destination first to bypass permission/ownership issues
+                for root_dir, dirs, files in os.walk(source_dir):
+                    for name in files:
+                        src_file = os.path.join(root_dir, name)
+                        rel_path = os.path.relpath(src_file, source_dir)
+                        dst_file = os.path.join(self._plugin_dir, rel_path)
+                        
+                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        if os.path.exists(dst_file):
+                            try:
+                                os.remove(dst_file)
+                            except Exception:
+                                pass
+                        shutil.copyfile(src_file, dst_file)
+                
+                decky.logger.info("Update files copied successfully. Awaiting manual restart.")
+                return {"success": True}
+                
+            except Exception as e:
+                import traceback
+                err = traceback.format_exc()
+                decky.logger.error(f"Update failed: {err}")
+                return {"success": False, "error": str(e)}
+
+        return await asyncio.get_event_loop().run_in_executor(None, _do_update)
 
     async def get_cef_debugger_url(self):
         import os
@@ -440,7 +507,8 @@ class Plugin:
         data = {
             "name": raw_data.get("name", "Unknown Game"),
             "developer": raw_data.get("developer", ""),
-            "steamAppId": str(raw_data.get("appid", ""))
+            "steamAppId": str(raw_data.get("appid", "")),
+            "source": "steam-deck"
         }
 
         def _send():

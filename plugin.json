@@ -1,7 +1,7 @@
 {
   "name": "VARTA",
   "author": "VARTA contributors",
-  "flags": [],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["steam", "ukraine", "library"],
