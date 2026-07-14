@@ -181,21 +181,11 @@ async function injectBadgeIntoStore(appid: string) {
             devNodes.forEach(function(n) { devs.push(n.textContent.trim()); });
             var developer = devs.join(", ") || "Unknown";
             
-            var steamId = "unknown";
-            try {
-              if (typeof window.SteamClient !== "undefined" && window.SteamClient.User && window.SteamClient.User.GetSteamID) {
-                steamId = window.SteamClient.User.GetSteamID();
-              } else if (typeof window.Application !== "undefined" && window.Application.GetSteamID) {
-                steamId = window.Application.GetSteamID();
-              }
-            } catch (e) {}
-            
             var data = {
               appid: ${JSON.stringify(payload.appid)},
               name: name.substring(0, 199),
               developer: developer.substring(0, 199),
-              timestamp: Date.now(),
-              steamId: steamId
+              timestamp: Date.now()
             };
             
             console.debug("VARTA_REPORT:" + JSON.stringify({ data: data }));
@@ -339,6 +329,16 @@ async function connectToStoreDebugger(retries = 5): Promise<void> {
           if (args && args.length > 0 && args[0].type === "string" && args[0].value.startsWith("VARTA_REPORT:")) {
             try {
               const payload = JSON.parse(args[0].value.substring(13));
+              let steamId = "unknown";
+              try {
+                if (typeof window.SteamClient !== "undefined" && window.SteamClient.User && window.SteamClient.User.GetSteamID) {
+                  steamId = window.SteamClient.User.GetSteamID();
+                }
+              } catch (e) {}
+              
+              if (!payload.data) payload.data = {};
+              payload.data.steamId = steamId;
+              
               reportGameToPython(payload).then((success) => {
                 evaluateInStore(`console.log("VARTA_REPLY received:", ${success});`);
                 if (success) {
