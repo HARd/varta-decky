@@ -332,8 +332,12 @@ async function connectToStoreDebugger(retries = 5): Promise<void> {
               let steamId = "unknown";
               try {
                 const anyWindow = window as any;
-                if (typeof anyWindow.SteamClient !== "undefined" && anyWindow.SteamClient.User && anyWindow.SteamClient.User.GetSteamID) {
+                if (anyWindow.App?.m_CurrentUser?.strSteamID) {
+                  steamId = anyWindow.App.m_CurrentUser.strSteamID;
+                } else if (typeof anyWindow.SteamClient !== "undefined" && anyWindow.SteamClient.User && anyWindow.SteamClient.User.GetSteamID) {
                   steamId = anyWindow.SteamClient.User.GetSteamID();
+                } else if (anyWindow.g_steamID) {
+                  steamId = anyWindow.g_steamID;
                 }
               } catch (e) {}
               
