@@ -520,7 +520,8 @@ class Plugin:
                     "Content-Type": "application/json",
                     "User-Agent": "varta-decky/1.0"
                 }
-                if DESKTOP_KEY and DESKTOP_KEY != "VARTA_INJECT_KEY_HERE":
+                INJECT_PLACEHOLDER = "VARTA_" + "INJECT_KEY_HERE"
+                if DESKTOP_KEY and DESKTOP_KEY != INJECT_PLACEHOLDER:
                     headers["X-Desktop-Key"] = DESKTOP_KEY
                     
                 req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
