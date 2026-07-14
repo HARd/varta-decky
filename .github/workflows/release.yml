@@ -31,6 +31,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Inject Desktop Key
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          sed -i 's/VARTA_INJECT_KEY_HERE/${{ secrets.VARTA_API_KEY }}/g' main.py
+
       - name: Package plugin
         run: npm run package
 

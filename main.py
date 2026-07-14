@@ -38,6 +38,8 @@ DEFAULT_SETTINGS = {
 CACHE_TTL_SECONDS = 60 * 60 * 24 * 14
 REMOTE_DATABASE_TTL_SECONDS = 60 * 60
 
+DESKTOP_KEY = "VARTA_INJECT_KEY_HERE"
+
 
 class Plugin:
     async def _main(self):
@@ -508,7 +510,8 @@ class Plugin:
             "name": raw_data.get("name", "Unknown Game"),
             "developer": raw_data.get("developer", ""),
             "steamAppId": str(raw_data.get("appid", "")),
-            "source": "steam-deck"
+            "source": "steam-deck",
+            "steamId": str(raw_data.get("steamId", ""))
         }
 
         def _send():
@@ -517,6 +520,9 @@ class Plugin:
                     "Content-Type": "application/json",
                     "User-Agent": "varta-decky/1.0"
                 }
+                if DESKTOP_KEY and DESKTOP_KEY != "VARTA_INJECT_KEY_HERE":
+                    headers["X-Desktop-Key"] = DESKTOP_KEY
+                    
                 req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, timeout=12, context=SSL_CONTEXT) as response:
                     return response.getcode() in (200, 201, 202, 204)
