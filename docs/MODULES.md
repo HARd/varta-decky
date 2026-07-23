@@ -6,6 +6,36 @@ The plugin architecture is built around the concept of **modules (extensions)**.
 
 ---
 
+## Архітектура (Architecture Overview)
+
+```mermaid
+flowchart TD
+    Steam(Steam Client) --> TS(Frontend: index.tsx / storePatch.ts)
+    TS -- "get_app_status(appid)" --> PY(Backend: main.py)
+    
+    subgraph Python Backend
+        PY --> Ext1PY[VartaExtension]
+        PY --> Ext2PY[PrystanokExtension]
+        Ext1PY -- "Check local/remote data" --> VartaDB[(Varta DB)]
+        Ext2PY -- "Check local/remote data" --> PrystanokDB[(Prystanok DB)]
+    end
+
+    Ext1PY -- "Result: VARTA" --> PY
+    Ext2PY -- "Result: Prystanok" --> PY
+    PY -- "Combined AppStatus" --> TS
+
+    subgraph TypeScript Frontend
+        TS --> Reg[registry.ts]
+        Reg --> Ext1TS[VartaExtension]
+        Reg --> Ext2TS[PrystanokExtension]
+        Ext1TS -- "Generate UI Chips" --> TS
+        Ext2TS -- "Generate UI Chips" --> TS
+    end
+    
+    TS -- "Render to Screen" --> Steam
+```
+
+---
 ##  Структура модуля (Module Structure)
 
 Модуль складається з двох частин:
