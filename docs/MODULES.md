@@ -14,8 +14,8 @@ flowchart TD
     TS -- "get_app_status(appid)" --> PY(Backend: main.py)
     
     subgraph Python Backend
-        PY --> Ext1PY[VartaExtension]
-        PY --> Ext2PY[PrystanokExtension]
+        PY -- "Auto-loads .py files" --> Ext1PY[VartaExtension]
+        PY -- "Auto-loads .py files" --> Ext2PY[PrystanokExtension]
         Ext1PY -- "Check local/remote data" --> VartaDB[(Varta DB)]
         Ext2PY -- "Check local/remote data" --> PrystanokDB[(Prystanok DB)]
     end
@@ -25,7 +25,8 @@ flowchart TD
     PY -- "Combined AppStatus" --> TS
 
     subgraph TypeScript Frontend
-        TS --> Reg[registry.ts]
+        Gen[generate-registry.mjs] -- "Pre-build step" --> Reg[registry.ts Auto-Generated]
+        TS --> Reg
         Reg --> Ext1TS[VartaExtension]
         Reg --> Ext2TS[PrystanokExtension]
         Ext1TS -- "Generate UI Chips" --> TS
