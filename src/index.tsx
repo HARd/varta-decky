@@ -22,13 +22,7 @@ import { initStorePatch, refreshStorePatch } from "./storePatch";
 import { initGridObserver, stopGridObserver } from "./gridObserver";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
-import { registerExtension, getExtensions } from "./extensions/registry";
-import { VartaCoreExtension } from "./extensions/varta";
-import { PrystanokExtension } from "./extensions/prystanok";
-
-registerExtension(VartaCoreExtension);
-registerExtension(PrystanokExtension);
-
+import { getExtensions } from "./extensions/registry";
 const DEFAULT_SETTINGS: PluginSettings = {
   markHostile: true,
   markUkrainian: true,

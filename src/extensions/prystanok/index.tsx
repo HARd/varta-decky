@@ -3,7 +3,7 @@ import {
   PanelSectionRow,
   ToggleField,
 } from "@decky/ui";
-import type { VartaExtension, ChipPayload } from "../registry";
+import type { VartaExtension, ChipPayload } from "../types";
 import { 
   PrystanokCCIcon, 
   PrystanokSpeakerIcon, 
@@ -13,7 +13,7 @@ import {
   PrystanokShieldIcon
 } from "../../icons";
 
-export const PrystanokExtension: VartaExtension = {
+const PrystanokExtension: VartaExtension = {
   id: "prystanok",
   name: "Prystanok",
   
@@ -150,3 +150,5 @@ export const PrystanokExtension: VartaExtension = {
     return chips;
   }
 };
+
+export default PrystanokExtension;

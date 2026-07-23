@@ -77,24 +77,35 @@ class Plugin:
                 self._settings["remoteDatabaseUrl"] = "https://api.varta.games/public"
                 self._save_json(self._settings_path, self._settings)
             import sys
+            import pkgutil
+            import importlib
+            import inspect
+
             ext_path = os.path.join(decky.DECKY_PLUGIN_DIR, "py_modules")
             if ext_path not in sys.path:
                 sys.path.insert(0, ext_path)
                 
-            from extensions.varta import VartaExtension
-            from extensions.prystanok import PrystanokExtension
+            from extensions.base import ExtensionBase
             
             self.extensions = []
+            extensions_dir = os.path.join(ext_path, "extensions")
             
-            varta_ext = VartaExtension(decky.DECKY_PLUGIN_DIR, decky.DECKY_PLUGIN_SETTINGS_DIR)
-            await varta_ext.initialize(self._settings)
-            self.extensions.append(varta_ext)
+            for _, module_name, _ in pkgutil.iter_modules([extensions_dir]):
+                if module_name == "base":
+                    continue
+                try:
+                    module = importlib.import_module(f"extensions.{module_name}")
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, ExtensionBase) and obj is not ExtensionBase:
+                            ext_instance = obj(decky.DECKY_PLUGIN_DIR, decky.DECKY_PLUGIN_SETTINGS_DIR)
+                            await ext_instance.initialize(self._settings)
+                            self.extensions.append(ext_instance)
+                            decky.logger.info(f"VARTA: Loaded extension {obj.__name__} from {module_name}")
+                except Exception as e:
+                    import traceback
+                    decky.logger.error(f"VARTA: Failed to load extension {module_name}: {e}\n{traceback.format_exc()}")
             
-            prystanok_ext = PrystanokExtension(decky.DECKY_PLUGIN_DIR, decky.DECKY_PLUGIN_SETTINGS_DIR)
-            await prystanok_ext.initialize(self._settings)
-            self.extensions.append(prystanok_ext)
-            
-            decky.logger.info("Modular extensions loaded")
+            decky.logger.info(f"Modular extensions loaded (total {len(self.extensions)})")
             self._loaded = True
 
             self._cache_dirty = False

@@ -74,17 +74,9 @@ class MyModuleExtension(BaseExtension):
         # Логіка оновлення бази (наприклад, завантаження з мережі)
         pass
 ```
-
-Після створення файлу, додайте його ініціалізацію в метод `_ensure_loaded` у `main.py`:
-
-```python
-from extensions.my_module import MyModuleExtension
-
-# У методі _ensure_loaded:
-my_module_ext = MyModuleExtension(decky.DECKY_PLUGIN_DIR, decky.DECKY_PLUGIN_SETTINGS_DIR)
-await my_module_ext.initialize(self._settings)
-self.extensions.append(my_module_ext) # <--- Ваш модуль додано до оркестратора
 ```
+
+**Це все для бекенду!** Плагін автоматично просканує папку `py_modules/extensions/`, знайде ваш клас і підключить його до ядра. Жодних змін у `main.py` робити не потрібно.
 
 ---
 
@@ -98,7 +90,7 @@ self.extensions.append(my_module_ext) # <--- Ваш модуль додано д
 import { Extension } from "../base";
 import { PluginSettings } from "../../types";
 
-export const MyModuleExtension: Extension = {
+const MyModuleExtension: Extension = {
   id: "my_module",
   name: "My Custom Module",
   
@@ -138,21 +130,11 @@ export const MyModuleExtension: Extension = {
     return null;
   },
 };
+
+export default MyModuleExtension;
 ```
 
-Додайте ваш модуль до фронтенд-реєстру у файлі `src/extensions/registry.ts`:
-
-```typescript
-import { VartaExtension } from "./varta";
-import { PrystanokExtension } from "./prystanok";
-import { MyModuleExtension } from "./my_module";
-
-export const EXTENSIONS = [
-  VartaExtension,
-  PrystanokExtension,
-  MyModuleExtension, // <--- Ваш модуль
-];
-```
+**Це все для фронтенду!** Наш пре-білд скрипт автоматично знайде вашу папку під час `npm run build` і підключить її до інтерфейсу. Жодних `registry.ts` правити не треба!
 
 ---
 

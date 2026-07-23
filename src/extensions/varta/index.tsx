@@ -7,7 +7,7 @@ import {
 } from "@decky/ui";
 import { t } from "../../i18n";
 import { WishlistScanner } from "../../WishlistScanner";
-import type { VartaExtension, ChipPayload } from "../registry";
+import type { VartaExtension, ChipPayload } from "../types";
 import { HostileStoreIcon, UkrStoreIcon, HostileLibraryIcon, UkrLibraryIcon } from "../../icons";
 
 function getColorOptions(lang: "uk" | "en") {
@@ -40,7 +40,7 @@ function getStyleOptions(lang: "uk" | "en") {
   ];
 }
 
-export const VartaCoreExtension: VartaExtension = {
+const VartaCoreExtension: VartaExtension = {
   id: "varta",
   name: "VARTA",
   
@@ -189,3 +189,5 @@ export const VartaCoreExtension: VartaExtension = {
     return chips;
   }
 };
+
+export default VartaCoreExtension;
