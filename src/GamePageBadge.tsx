@@ -1,8 +1,7 @@
 import { useParams } from "@decky/ui";
 import { useEffect, useState, useMemo } from "react";
 import type { AppStatus, PluginSettings } from "./types";
-import { UkrLibraryIcon, HostileLibraryIcon } from "./icons";
-import { t } from "./i18n";
+import { getExtensions } from "./extensions/registry";
 
 type Props = {
   lookup: (appid: string) => Promise<AppStatus>;
@@ -43,33 +42,64 @@ export default function GamePageBadge({ lookup, getSettings, placement = "librar
     };
   }, [settings.libraryBadgePosition, placement]);
 
-  if (!status?.type) return null;
+  if (!status) return null;
 
-  const isIcon = settings.libraryBadgeStyle === "icon";
-  const iconSrc = status.type === "hostile" ? HostileLibraryIcon : UkrLibraryIcon;
-  const color = status.type === "hostile" ? settings.hostileColor : settings.ukrainianColor;
-  const label = status.type === "hostile" ? t(settings.language, "badge_hostile") : t(settings.language, "badge_friendly");
-  const matches = [...status.matches.hostile, ...status.matches.ukrainian].join(", ");
+  const chips = getExtensions()
+    .map(ext => ext.getStoreChips(status, settings))
+    .flat()
+    .filter(chip => !chip.isReport); // For now, only visual badges on library page
 
-  if (isIcon) {
-    return (
-      <div style={containerStyle}>
-        <img 
-          src={iconSrc} 
-          alt={label} 
-          style={{ width: "128px", height: "auto", filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.6))" }} 
-        />
-      </div>
-    );
-  }
+  if (chips.length === 0) return null;
 
   return (
     <div style={containerStyle}>
-      <div style={{ ...badgeStyle, backgroundColor: color }}>
-        <img src={iconSrc} alt="icon" style={{ height: "28px", width: "auto", display: "block" }} />
-        <strong>{label}</strong>
-        {matches && <span style={matchStyle}>{matches}</span>}
-      </div>
+      {chips.map((chip, idx) => {
+        if (settings.libraryBadgeStyle === "icon" || chip.isIcon) {
+          const iconSrc = chip.libraryIconSrc || chip.iconSrc;
+          if (iconSrc) {
+            return (
+              <img 
+                key={idx}
+                src={iconSrc} 
+                alt={chip.label} 
+                title={chip.label}
+                style={{ width: "64px", height: "auto", filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.6))" }} 
+              />
+            );
+          }
+        }
+        
+        const color = chip.background || (chip.type === "hostile" ? settings.hostileColor : settings.ukrainianColor);
+        const iconSrc = chip.libraryIconSrc || chip.iconSrc;
+        return (
+            <div 
+              key={idx}
+              style={{
+                background: color,
+                color: "#fff",
+                padding: "8px 16px 8px 12px",
+                borderRadius: "8px",
+                fontFamily: "Motiva Sans, Arial, sans-serif",
+                fontSize: "14px",
+                fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+              }}
+              title={chip.label}
+            >
+              {iconSrc && (
+                <img 
+                  src={iconSrc} 
+                  style={{ height: "28px", width: "auto", display: "block", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }} 
+                  alt="" 
+                />
+              )}
+              <span>{chip.label}</span>
+            </div>
+          );
+      })}
     </div>
   );
 }
@@ -102,26 +132,4 @@ const storeContainerStyle = {
   right: "92px",
   zIndex: 999999,
   pointerEvents: "none",
-} as const;
-
-const badgeStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  maxWidth: "520px",
-  minHeight: "32px",
-  padding: "7px 10px",
-  borderRadius: "4px",
-  color: "#fff",
-  fontSize: "13px",
-  lineHeight: 1.2,
-  letterSpacing: 0,
-  boxShadow: "0 4px 16px rgba(0,0,0,.45)",
-  textShadow: "0 1px 1px rgba(0,0,0,.45)",
-} as const;
-
-const matchStyle = {
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
 } as const;

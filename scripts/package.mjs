@@ -20,6 +20,7 @@ for (const item of [
   "README.md",
   "dist",
   "main.py",
+  "py_modules",
   "plugin.json",
 ]) {
   cpSync(join(root, item), join(stagingDir, item), { recursive: true });
