@@ -17,6 +17,8 @@ export interface PluginSettings {
   lastSeenUkrCount: number;
   analyticsEnabled: boolean;
   analyticsId: string;
+  showPrystanokLoc: boolean;
+  detailedPrystanokBadges: boolean;
 }
 
 export interface AppStatus {

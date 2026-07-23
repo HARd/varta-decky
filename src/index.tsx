@@ -2,9 +2,6 @@ import {
   ButtonItem,
   PanelSection,
   PanelSectionRow,
-  ToggleField,
-  SliderField,
-  DropdownItem,
   staticClasses,
 } from "@decky/ui";
 import { callable, definePlugin, routerHook, toaster } from "@decky/api";
@@ -22,10 +19,10 @@ import {
 } from "./localBackend";
 import { patchLibraryApp } from "./patchLibraryApp";
 import { initStorePatch, refreshStorePatch } from "./storePatch";
-import { WishlistScanner } from "./WishlistScanner";
+import { initGridObserver, stopGridObserver } from "./gridObserver";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
-
+import { getExtensions } from "./extensions/registry";
 const DEFAULT_SETTINGS: PluginSettings = {
   markHostile: true,
   markUkrainian: true,
@@ -43,6 +40,8 @@ const DEFAULT_SETTINGS: PluginSettings = {
   lastSeenUkrCount: 0,
   analyticsEnabled: true,
   analyticsId: "",
+  showPrystanokLoc: true,
+  detailedPrystanokBadges: true,
 };
 
 const getAppStatus = callable<[appid: string], AppStatus>("get_app_status");
@@ -55,35 +54,7 @@ const applyUpdate = callable<[], { success: boolean; error?: string }>("apply_up
 const getDatabaseStats = callable<[], DatabaseStats>("get_database_stats");
 const trackEvent = callable<[event: string, properties?: Record<string, any>], boolean>("track_event");
 
-function getColorOptions(lang: "uk" | "en") {
-  return [
-    { data: "#e74c3c", label: t(lang, "color_red") },
-    { data: "#7a2a2a", label: t(lang, "color_darkred") },
-    { data: "#e67e22", label: t(lang, "color_orange") },
-    { data: "#f1c40f", label: t(lang, "color_yellow") },
-    { data: "#27ae60", label: t(lang, "color_green") },
-    { data: "#2980b9", label: t(lang, "color_blue") },
-    { data: "#8e44ad", label: t(lang, "color_purple") },
-    { data: "#2c3e50", label: t(lang, "color_darkblue") },
-    { data: "#bdc3c7", label: t(lang, "color_gray") },
-  ];
-}
 
-function getPositionOptions(lang: "uk" | "en") {
-  return [
-    { data: "top-left", label: t(lang, "pos_tl") },
-    { data: "top-right", label: t(lang, "pos_tr") },
-    { data: "bottom-left", label: t(lang, "pos_bl") },
-    { data: "bottom-right", label: t(lang, "pos_br") },
-  ];
-}
-
-function getStyleOptions(lang: "uk" | "en") {
-  return [
-    { data: "text", label: t(lang, "style_text") },
-    { data: "icon", label: t(lang, "style_icon") },
-  ];
-}
 
 const BACKEND_TIMEOUT_MS = 5000;
 let activeSettings = getLocalSettings();
@@ -282,104 +253,11 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
-      <PanelSection title={t(lang, "section_ui")}>
-        <PanelSectionRow>
-          <DropdownItem
-            menuLabel={t(lang, "menu_language")}
-            rgOptions={[
-              { data: "uk", label: "Українська" },
-              { data: "en", label: "English" },
-            ]}
-            selectedOption={settings.language}
-            onChange={(option) => updateSetting("language", option.data as "uk" | "en")}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label={t(lang, "menu_hostile_dev")}
-            checked={settings.markHostile}
-            onChange={(checked) => updateSetting("markHostile", checked)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label={t(lang, "menu_ukrainian_dev")}
-            checked={settings.markUkrainian}
-            onChange={(checked) => updateSetting("markUkrainian", checked)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label={t(lang, "menu_show_badges")}
-            checked={settings.showBadges}
-            onChange={(checked) => updateSetting("showBadges", checked)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label={t(lang, "menu_show_report")}
-            checked={settings.showReportButton}
-            onChange={(checked) => updateSetting("showReportButton", checked)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <SliderField
-            label={t(lang, "menu_overlay_opacity")}
-            description={`${Math.round(settings.overlayOpacity * 100)}%`}
-            value={settings.overlayOpacity}
-            min={0.05}
-            max={1}
-            step={0.05}
-            onChange={(value) => updateSetting("overlayOpacity", value)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <div style={{ padding: "10px 0 5px 0", fontSize: "12px", color: "#969696", textTransform: "uppercase", fontWeight: 600 }}>{t(lang, "menu_hostile_color")}</div>
-          <DropdownItem
-            menuLabel={t(lang, "menu_hostile_color")}
-            rgOptions={getColorOptions(lang)}
-            selectedOption={settings.hostileColor}
-            onChange={(option) => updateSetting("hostileColor", option.data as string)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <div style={{ padding: "10px 0 5px 0", fontSize: "12px", color: "#969696", textTransform: "uppercase", fontWeight: 600 }}>{t(lang, "menu_ukrainian_color")}</div>
-          <DropdownItem
-            menuLabel={t(lang, "menu_ukrainian_color")}
-            rgOptions={getColorOptions(lang)}
-            selectedOption={settings.ukrainianColor}
-            onChange={(option) => updateSetting("ukrainianColor", option.data as string)}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <div style={{ padding: "10px 0 5px 0", fontSize: "12px", color: "#969696", textTransform: "uppercase", fontWeight: 600 }}>{t(lang, "menu_badge_position")}</div>
-          <DropdownItem
-            menuLabel={t(lang, "menu_badge_position")}
-            rgOptions={getPositionOptions(lang)}
-            selectedOption={settings.libraryBadgePosition}
-            onChange={(option) => updateSetting("libraryBadgePosition", option.data as PluginSettings["libraryBadgePosition"])}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <div style={{ padding: "10px 0 5px 0", fontSize: "12px", color: "#969696", textTransform: "uppercase", fontWeight: 600 }}>{t(lang, "menu_badge_style")}</div>
-          <DropdownItem
-            menuLabel={t(lang, "menu_badge_style")}
-            rgOptions={getStyleOptions(lang)}
-            selectedOption={settings.libraryBadgeStyle}
-            onChange={(option) => updateSetting("libraryBadgeStyle", option.data as PluginSettings["libraryBadgeStyle"])}
-          />
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label={t(lang, "menu_analytics")}
-            description={t(lang, "menu_analytics_desc")}
-            checked={settings.analyticsEnabled}
-            onChange={(checked) => updateSetting("analyticsEnabled", checked)}
-          />
-        </PanelSectionRow>
-      </PanelSection>
-
-      <WishlistScanner getAppStatus={getResolvedAppStatus} lang={lang} />
+      {getExtensions().map((ext) => (
+        <div key={ext.id}>
+          {ext.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
+        </div>
+      ))}
 
       {updateInfo?.hasUpdate && (
         <PanelSection>
@@ -462,6 +340,7 @@ export default definePlugin(() => {
 
   const libraryPatch = patchLibraryApp(getResolvedAppStatus, () => activeSettings);
   const stopStorePatch = initStorePatch(getResolvedAppStatus, () => activeSettings);
+  initGridObserver(getResolvedAppStatus, () => activeSettings);
   startSteamUiInjection(getResolvedAppStatus, getLocalSettings());
 
   return {
@@ -472,6 +351,7 @@ export default definePlugin(() => {
     onDismount() {
       routerHook.removePatch("/library/app/:appid", libraryPatch);
       stopStorePatch();
+      stopGridObserver();
       stopSteamUiInjection();
     },
   };

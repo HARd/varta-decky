@@ -76,58 +76,51 @@ class Plugin:
             if "firebase" in str(self._settings.get("remoteDatabaseUrl", "")).lower():
                 self._settings["remoteDatabaseUrl"] = "https://api.varta.games/public"
                 self._save_json(self._settings_path, self._settings)
+            import sys
+            import pkgutil
+            import importlib
+            import inspect
+
+            ext_path = os.path.join(decky.DECKY_PLUGIN_DIR, "py_modules")
+            if ext_path not in sys.path:
+                sys.path.insert(0, ext_path)
+                
+            from extensions.base import ExtensionBase
             
-            self._cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json")
-            # Use SETTINGS_DIR for db cache + etags — survives Decky updates
-            self._db_cache_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "database-cache.json")
-            self._etags_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "etags.json")
-            self._db_meta_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "database-meta.json")
-            self._lock = asyncio.Lock()
-            self._database = self._load_database()
-            self._cache = self._load_json(self._cache_path, {})
-            self._etags = self._load_json(self._etags_path, {})
-            self._remote_database_error = None
-
-            # Restore persisted meta (source, url, fetched_at) so Decky restarts
-            # don't force a redundant full re-fetch when the cache is already fresh.
-            db_meta = self._load_json(self._db_meta_path, {})
-            cached_url = db_meta.get("url", "")
-            cached_fetched_at = db_meta.get("fetched_at", 0)
-            configured_url = self._clean_api_url(str(self._settings.get("remoteDatabaseUrl", "")).strip())
-
-            if (
-                db_meta.get("source") == "remote"
-                and cached_url == configured_url
-                and cached_fetched_at > 0
-                and "hostile" in self._database
-            ):
-                self._database_source = "remote"
-                self._remote_database_url = cached_url
-                self._remote_database_fetched_at = cached_fetched_at
-                self._set_database(self._database, "remote", cached_url)
-            else:
-                self._database_source = "bundled"
-                self._remote_database_url = ""
-                self._remote_database_fetched_at = 0
-                self._set_database(self._database, "bundled", "")
-
+            self.extensions = []
+            extensions_dir = os.path.join(ext_path, "extensions")
+            
+            for _, module_name, _ in pkgutil.iter_modules([extensions_dir]):
+                if module_name == "base":
+                    continue
+                try:
+                    module = importlib.import_module(f"extensions.{module_name}")
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, ExtensionBase) and obj is not ExtensionBase:
+                            ext_instance = obj(decky.DECKY_PLUGIN_DIR, decky.DECKY_PLUGIN_SETTINGS_DIR)
+                            await ext_instance.initialize(self._settings)
+                            self.extensions.append(ext_instance)
+                            decky.logger.info(f"VARTA: Loaded extension {obj.__name__} from {module_name}")
+                except Exception as e:
+                    import traceback
+                    decky.logger.error(f"VARTA: Failed to load extension {module_name}: {e}\n{traceback.format_exc()}")
+            
+            decky.logger.info(f"Modular extensions loaded (total {len(self.extensions)})")
             self._loaded = True
+
             self._cache_dirty = False
-            decky.logger.info(f"VARTA loaded {len(self._hostile_set)} hostile and {len(self._ukrainian_set)} Ukrainian entries")
+            self._cache = self._load_json(os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json"), {})
 
             # Ensure a stable analytics ID exists
             if not self._settings.get("analyticsId"):
                 self._settings["analyticsId"] = str(uuid.uuid4())
                 self._save_json(self._settings_path, self._settings)
 
-            asyncio.create_task(self._refresh_database())
             asyncio.create_task(self._auto_refresh_loop())
             asyncio.create_task(self._cache_saver_loop())
             self._send_posthog("plugin_loaded", {
-                "db_version": self._database.get("version", "unknown"),
-                "hostile_count": len(self._hostile_set),
-                "ukrainian_count": len(self._ukrainian_set),
-                "db_source": self._database_source,
+                "db_version": "modular",
+                "db_source": "extensions",
             })
         except Exception as e:
             import traceback
@@ -150,21 +143,18 @@ class Plugin:
         await self._ensure_loaded()
         await self._save_cache(force=True)
         self._save_json(self._settings_path, self._settings)
-        self._save_json(self._etags_path, self._etags)
 
     async def get_database_stats(self):
         try:
             await self._ensure_loaded()
-            return {
-                "version": self._database.get("version", "unknown"),
-                "hostileCount": len(self._hostile_set),
-                "ukrainianCount": len(self._ukrainian_set),
-                "reportsCount": len(self._database.get("reports", [])),
-                "cacheCount": len(self._cache),
-                "source": self._database_source,
-                "remoteUrl": self._remote_database_url or None,
-                "lastRemoteError": self._remote_database_error,
-            }
+            
+            # Find VartaExtension and get stats
+            for ext in self.extensions:
+                if type(ext).__name__ == "VartaExtension":
+                    if hasattr(ext, "get_stats"):
+                        return ext.get_stats()
+            
+            return {"status": "modular", "hostileCount": 0, "ukrainianCount": 0, "reportsCount": 0}
         except Exception as e:
             import traceback
             err_trace = traceback.format_exc()
@@ -201,68 +191,28 @@ class Plugin:
             
         sanitized = {**DEFAULT_SETTINGS, **settings}
         
-        # Prevent overwriting a valid analyticsId with an empty string from the frontend
         if not sanitized.get("analyticsId") and self._settings.get("analyticsId"):
             sanitized["analyticsId"] = self._settings.get("analyticsId")
             
-        try:
-            sanitized["overlayOpacity"] = min(1.0, max(0.05, float(sanitized.get("overlayOpacity", 0.35))))
-        except Exception:
-            sanitized["overlayOpacity"] = 0.35
-            
-        sanitized["remoteDatabaseEnabled"] = bool(sanitized.get("remoteDatabaseEnabled", True))
-        sanitized["remoteDatabaseUrl"] = str(sanitized.get("remoteDatabaseUrl", "")).strip()
-        
-        needs_refresh = False
-        if self._settings.get("remoteDatabaseEnabled") != sanitized["remoteDatabaseEnabled"]:
-            needs_refresh = True
-        if self._settings.get("remoteDatabaseUrl") != sanitized["remoteDatabaseUrl"]:
-            needs_refresh = True
-
         self._settings = sanitized
         self._save_json(self._settings_path, self._settings)
-        
-        if needs_refresh:
-            await self._refresh_database(force=True)
-            
         return self._settings
 
     async def set_setting(self, key, value):
         decky.logger.info(f"set_setting: {key} = {value}")
         await self._ensure_loaded()
         
-        # Prevent overwriting a valid analyticsId with an empty string
         if key == "analyticsId" and not value and self._settings.get("analyticsId"):
             return self._settings
             
         self._settings[key] = value
-        
-        try:
-            self._settings["overlayOpacity"] = min(1.0, max(0.05, float(self._settings.get("overlayOpacity", 0.35))))
-        except Exception:
-            self._settings["overlayOpacity"] = 0.35
-            
-        self._settings["remoteDatabaseEnabled"] = bool(self._settings.get("remoteDatabaseEnabled", True))
-        self._settings["remoteDatabaseUrl"] = str(self._settings.get("remoteDatabaseUrl", "")).strip()
-
         self._save_json(self._settings_path, self._settings)
-        
-        if key in ["remoteDatabaseEnabled", "remoteDatabaseUrl"]:
-            await self._refresh_database(force=True)
-            
         return self._settings
 
     async def refresh_database(self, force=True):
         await self._ensure_loaded()
         await self._refresh_database(force=force)
-        stats = await self.get_database_stats()
-        self._send_posthog("database_refreshed", {
-            "forced": bool(force),
-            "db_version": stats.get("version", "unknown"),
-            "hostile_count": stats.get("hostileCount", 0),
-            "ukrainian_count": stats.get("ukrainianCount", 0),
-        })
-        return stats
+        return await self.get_database_stats()
 
     def _parse_version(self, v_str):
         v_str = str(v_str).lstrip('v')
@@ -363,7 +313,6 @@ class Plugin:
                 source_dir = os.path.join(extract_path, extracted_dirs[0])
                 decky.logger.info(f"Copying files from {source_dir} to {self._plugin_dir}")
                 
-                # Copy files one by one, removing the destination first to bypass permission/ownership issues
                 for root_dir, dirs, files in os.walk(source_dir):
                     for name in files:
                         src_file = os.path.join(root_dir, name)
@@ -404,100 +353,23 @@ class Plugin:
 
     async def get_app_status(self, appid):
         await self._ensure_loaded()
-        appid = str(appid).strip()
-        if not appid:
-            return self._empty_status(appid)
-
-        if not hasattr(self, "_inflight"):
-            self._inflight = {}
-
-        async with self._lock:
-            cached = self._cache.get(appid)
-            if cached and time.time() - cached.get("fetchedAt", 0) < CACHE_TTL_SECONDS:
-                return self._mark_status(appid, cached.get("name", "Unknown Game"), cached.get("developers", []), cached.get("publishers", []))
-
-            if appid in self._inflight:
-                event = self._inflight[appid]
-                do_fetch = False
-            else:
-                event = asyncio.Event()
-                self._inflight[appid] = event
-                do_fetch = True
-
-        if do_fetch:
-            details = await asyncio.get_event_loop().run_in_executor(None, self._fetch_appdetails, appid)
-            async with self._lock:
-                if details:
-                    self._cache[appid] = {
-                        "name": details.get("name", "Unknown Game"),
-                        "developers": details.get("developers", []),
-                        "publishers": details.get("publishers", []),
-                        "fetchedAt": int(time.time()),
-                    }
-                    await self._save_cache()
-                event.set()
-                del self._inflight[appid]
-        else:
-            await event.wait()
-            async with self._lock:
-                cached = self._cache.get(appid)
-            if cached:
-                return self._mark_status(appid, cached.get("name", "Unknown Game"), cached.get("developers", []), cached.get("publishers", []))
-            return self._empty_status(appid)
-
-        if not details:
-            return self._empty_status(appid)
-
-        return self._mark_status(appid, details.get("name", "Unknown Game"), details.get("developers", []), details.get("publishers", []))
+        details = await asyncio.get_event_loop().run_in_executor(None, self._fetch_appdetails, appid)
+        details = details or {}
+        
+        status = {"appid": str(appid)}
+        for ext in self.extensions:
+            try:
+                ext_status = await ext.get_app_status(str(appid), details, self._settings)
+                if ext_status:
+                    status.update(ext_status)
+            except Exception as e:
+                import traceback
+                decky.logger.error(f"VARTA extension error for {appid}: {e}\n{traceback.format_exc()}")
+        return status
 
     async def search_database(self, query, limit=40):
-        await self._ensure_loaded()
-        needle = query.strip().lower()
-        if not needle:
-            return {"hostile": [], "ukrainian": []}
-
-        def search(items):
-            matches = [name for name in items if needle in name.lower()]
-            return matches[: max(1, min(int(limit), 100))]
-
-        return {
-            "hostile": search(self._database.get("hostile", [])),
-            "ukrainian": search(self._database.get("ukrainian", [])),
-        }
-
-    def _mark_status(self, appid, name, developers, publishers):
-        names = list(dict.fromkeys([*developers, *publishers]))
-        hostile = [name for name in names if name in self._hostile_set]
-        ukrainian = [name for name in names if name in self._ukrainian_set]
-        mark_type = None
-        if self._settings.get("markHostile", True) and hostile:
-            mark_type = "hostile"
-        elif self._settings.get("markUkrainian", True) and ukrainian:
-            mark_type = "ukrainian"
-        elif str(appid) in self._database.get("reports", []):
-            mark_type = "in_review"
-
-        return {
-            "appid": appid,
-            "name": name,
-            "type": mark_type,
-            "developers": developers,
-            "publishers": publishers,
-            "matches": {
-                "hostile": hostile,
-                "ukrainian": ukrainian,
-            },
-        }
-
-    def _empty_status(self, appid):
-        return {
-            "appid": appid,
-            "name": "Unknown Game",
-            "type": None,
-            "developers": [],
-            "publishers": [],
-            "matches": {"hostile": [], "ukrainian": []},
-        }
+        # Deprecated
+        return {"hostile": [], "ukrainian": []}
 
     async def report_game(self, payload):
         await self._ensure_loaded()
@@ -558,143 +430,14 @@ class Plugin:
                     "developers": data.get("developers") or [],
                     "publishers": data.get("publishers") or [],
                 }
-
-        decky.logger.info(f"Falling back to SteamSpy API for {appid}")
-        try:
-            spy_url = f"https://steamspy.com/api.php?request=appdetails&appid={appid}"
-            spy_req = urllib.request.Request(spy_url, headers={"User-Agent": "varta-decky/0.2"})
-            with urllib.request.urlopen(spy_req, timeout=12, context=SSL_CONTEXT) as response:
-                if response.getcode() == 200:
-                    spy_payload = json.loads(response.read().decode("utf-8"))
-                    dev_str = spy_payload.get("developer", "")
-                    pub_str = spy_payload.get("publisher", "")
-                    devs = [d.strip() for d in dev_str.split(",")] if dev_str else []
-                    pubs = [p.strip() for p in pub_str.split(",")] if pub_str else []
-                    
-                    if devs or pubs:
-                        return {
-                            "name": spy_payload.get("name", "Unknown Game"),
-                            "developers": devs,
-                            "publishers": pubs,
-                        }
-        except Exception as exc:
-            decky.logger.warning("Failed to fetch appdetails from SteamSpy for %s: %s", appid, exc)
-
         return None
 
-    def _load_database(self):
-        cached = self._load_json(self._db_cache_path, None)
-        if cached is not None and isinstance(cached, dict) and "hostile" in cached:
-            return cached
-        return self._load_json(self._data_path, {"hostile": [], "ukrainian": []})
-
     async def _refresh_database(self, force=False):
-        if getattr(self, "_refreshing", False):
-            while getattr(self, "_refreshing", False):
-                await asyncio.sleep(0.1)
-            if not force:
-                return
-        self._refreshing = True
-        try:
-            remote_enabled = self._settings.get("remoteDatabaseEnabled", False)
-            remote_url = str(self._settings.get("remoteDatabaseUrl", "")).strip()
-            if not remote_enabled or not remote_url:
-                self._set_database(self._load_database(), "bundled", "")
-                self._remote_database_error = None
-                return
-
-            url = self._clean_api_url(remote_url)
-            fresh = (
-                not force
-                and self._database_source == "remote"
-                and self._remote_database_url == url
-                and time.time() - self._remote_database_fetched_at < REMOTE_DATABASE_TTL_SECONDS
-            )
-            if fresh:
-                return
-
+        for ext in self.extensions:
             try:
-                loop = asyncio.get_event_loop()
-                current_etags = self._etags.copy()
-                if force:
-                    current_etags = {}
-                elif self._database.get("version") == "1.0.1" and "version" in current_etags:
-                    del current_etags["version"]
-                    
-                fetch_args = (url, current_etags, self._database)
-                remote_database, new_etags = await loop.run_in_executor(None, self._fetch_remote_database, *fetch_args)
-                self._etags = new_etags
-                self._set_database(remote_database, "remote", url)
-                self._remote_database_fetched_at = time.time()
-                self._remote_database_error = None
-                await loop.run_in_executor(None, self._save_json, self._db_cache_path, remote_database)
-                await loop.run_in_executor(None, self._save_json, self._etags_path, self._etags)
-                await loop.run_in_executor(None, self._save_json, self._db_meta_path, {
-                    "source": "remote",
-                    "url": url,
-                    "fetched_at": self._remote_database_fetched_at,
-                    "version": remote_database.get("version", "unknown"),
-                })
-            except Exception as exc:
-                decky.logger.warning("Failed to fetch remote database: %s", exc)
-                self._remote_database_error = str(exc)
-                if self._database_source != "remote":
-                    self._set_database(self._load_database(), "bundled", "")
-        finally:
-            self._refreshing = False
-
-    def _set_database(self, database, source, remote_url):
-        self._database = database
-        self._database_source = source
-        self._remote_database_url = remote_url
-        self._hostile_set = set(self._database.get("hostile", []))
-        self._ukrainian_set = set(self._database.get("ukrainian", []))
-
-    def _fetch_remote_database(self, base_url, etags, existing_db):
-        updated_etags = etags.copy()
-        
-        def fetch_node(node, default_value):
-            req = urllib.request.Request(f"{base_url}/{node}.json", headers={"User-Agent": "varta-decky/1.0"})
-            if node in updated_etags:
-                req.add_header("If-None-Match", updated_etags[node])
-            try:
-                with urllib.request.urlopen(req, timeout=12, context=SSL_CONTEXT) as response:
-                    etag = response.headers.get("ETag")
-                    if etag:
-                        updated_etags[node] = etag
-                    data = json.loads(response.read().decode("utf-8"))
-                    return data if data is not None else default_value
-            except urllib.error.HTTPError as e:
-                if e.code == 304:
-                    return existing_db.get(node, default_value)
-                return default_value
-            except Exception:
-                return default_value
-
-        hostile = fetch_node("hostile", [])
-        ukrainian = fetch_node("ukrainian", [])
-        reports = fetch_node("reports", [])
-        version_data = fetch_node("version", None)
-        
-        if isinstance(version_data, dict):
-            version_string = str(version_data.get("version", "1.0.1"))
-        elif isinstance(version_data, str):
-            version_string = version_data
-        else:
-            version_string = "1.0.1"
-        
-        if not isinstance(hostile, list) or not isinstance(ukrainian, list):
-            raise ValueError("Remote database must contain hostile[] and ukrainian[] arrays")
-
-        report_appids = [str(r) for r in reports if isinstance(r, (str, int))]
-
-        return {
-            "version": version_string,
-            "source": "VARTA API",
-            "hostile": [str(name) for name in hostile],
-            "ukrainian": [str(name) for name in ukrainian],
-            "reports": report_appids,
-        }, updated_etags
+                await ext.refresh_database(self._settings, force=force)
+            except Exception as e:
+                decky.logger.error(f"Failed to refresh extension {type(ext).__name__}: {e}")
 
     def _clean_api_url(self, url):
         return url.strip().rstrip("/")
