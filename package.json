@@ -1,7 +1,7 @@
 {
   "name": "varta-decky",
-  "version": "1.0.17",
-  "description": "VARTA: Decky Loader plugin that marks Ukrainian and hostile developers in the Steam Deck interface.",
+  "version": "1.0.18",
+  "description": "VARTA and Prystanok game scanner for Steam Deck",
   "type": "module",
   "scripts": {
     "build": "node scripts/generate-registry.mjs && node scripts/build.mjs",

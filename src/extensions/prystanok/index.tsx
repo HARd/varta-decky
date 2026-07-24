@@ -24,7 +24,7 @@ const PrystanokExtension: VartaExtension = {
           <ToggleField
             label="Показувати українську локалізацію"
             description="Відмальовувати бейджі для ігор з українською локалізацією"
-            checked={settings.showPrystanokLoc}
+            checked={settings.showPrystanokLoc ?? true}
             onChange={(checked) => setSetting("showPrystanokLoc", checked)}
           />
         </PanelSectionRow>
@@ -32,7 +32,7 @@ const PrystanokExtension: VartaExtension = {
           <ToggleField
             label="Детальні бейджі"
             description="Показувати додаткові іконки типу локалізації та детальні описи"
-            checked={settings.detailedPrystanokBadges}
+            checked={settings.detailedPrystanokBadges ?? true}
             onChange={(checked) => setSetting("detailedPrystanokBadges", checked)}
           />
         </PanelSectionRow>

@@ -214,18 +214,29 @@ class Plugin:
         await self._refresh_database(force=force)
         return await self.get_database_stats()
 
-    def _parse_version(self, v_str):
-        v_str = str(v_str).lstrip('v')
-        parts = v_str.split('-', 1)
+    def _parse_version(self, version_str):
+        version_str = str(version_str).lstrip('v')
+        parts = version_str.split('-')
         main_parts = parts[0].split('.')
         try:
             major = int(main_parts[0]) if len(main_parts) > 0 else 0
             minor = int(main_parts[1]) if len(main_parts) > 1 else 0
             patch = int(main_parts[2]) if len(main_parts) > 2 else 0
         except ValueError:
-            return (0, 0, 0, 0)
-        weight = 1 if len(parts) > 1 and 'testing' in parts[1] else 2
-        return (major, minor, patch, weight)
+            return (0, 0, 0, 0, 0)
+            
+        weight = 2
+        build = 0
+        if len(parts) > 1 and 'testing' in parts[1]:
+            weight = 1
+            testing_parts = parts[1].split('.')
+            if len(testing_parts) > 1:
+                try:
+                    build = int(testing_parts[1])
+                except ValueError:
+                    pass
+                    
+        return (major, minor, patch, weight, build)
 
     async def get_update_status(self):
         await self._ensure_loaded()
