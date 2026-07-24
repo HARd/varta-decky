@@ -42,10 +42,12 @@ jobs:
       - name: Check if prerelease
         id: check_tag
         run: |
-          if [[ "${{ github.ref }}" == *"-testing" ]]; then
+          if [[ "${{ github.ref }}" == *"testing"* ]]; then
             echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "make_latest=false" >> $GITHUB_OUTPUT
           else
             echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "make_latest=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload release asset
@@ -55,3 +57,4 @@ jobs:
           files: release/varta-decky.zip
           generate_release_notes: true
           prerelease: ${{ steps.check_tag.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.check_tag.outputs.make_latest == 'true' }}
