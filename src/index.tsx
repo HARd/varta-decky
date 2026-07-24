@@ -257,8 +257,8 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
-      {PrystanokExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
       {VartaCoreExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
+      {PrystanokExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
 
       {updateInfo?.hasUpdate && (
         <PanelSection>
