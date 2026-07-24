@@ -22,7 +22,7 @@ import { initStorePatch, refreshStorePatch } from "./storePatch";
 import { initGridObserver, stopGridObserver } from "./gridObserver";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
-import { getExtensions } from "./extensions/registry";
+
 import PrystanokExtension from "./extensions/prystanok";
 import VartaCoreExtension from "./extensions/varta";
 const DEFAULT_SETTINGS: PluginSettings = {
