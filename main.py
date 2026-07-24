@@ -367,6 +367,20 @@ class Plugin:
                 decky.logger.error(f"VARTA extension error for {appid}: {e}\n{traceback.format_exc()}")
         return status
 
+    async def get_app_statuses(self, appids):
+        # Process a batch of appids concurrently
+        tasks = [self.get_app_status(appid) for appid in appids]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        response = {}
+        for appid, result in zip(appids, results):
+            if isinstance(result, Exception):
+                decky.logger.error(f"VARTA batch error for {appid}: {result}")
+                response[str(appid)] = {"appid": str(appid), "error": str(result)}
+            else:
+                response[str(appid)] = result
+        return response
+
     async def search_database(self, query, limit=40):
         # Deprecated
         return {"hostile": [], "ukrainian": []}

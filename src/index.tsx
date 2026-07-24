@@ -45,6 +45,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
 };
 
 const getAppStatus = callable<[appid: string], AppStatus>("get_app_status");
+const getAppStatuses = callable<[appids: string[]], Record<string, AppStatus>>("get_app_statuses");
 const getSettings = callable<[], PluginSettings>("get_settings");
 const saveSettings = callable<[{settings: PluginSettings}], PluginSettings>("save_settings");
 const setSetting = callable<[{key: string, value: any}], PluginSettings>("set_setting");
@@ -364,14 +365,49 @@ function clearAppStatusCache() {
   appStatusCache.clear();
 }
 
+let batchQueue: { appid: string; resolve: (val: AppStatus) => void; reject: (err: any) => void }[] = [];
+let batchTimeout: number | undefined;
+
+async function processBatch() {
+  const currentQueue = batchQueue;
+  batchQueue = [];
+  batchTimeout = undefined;
+  
+  if (currentQueue.length === 0) return;
+  
+  const appids = currentQueue.map(q => q.appid);
+  try {
+    const results = await getAppStatuses(appids);
+    for (const q of currentQueue) {
+      if (results[q.appid]) {
+        q.resolve(results[q.appid]);
+      } else {
+        q.resolve({ appid: q.appid, type: null } as any);
+      }
+    }
+  } catch (err) {
+    console.error("VARTA Batching IPC failed:", err);
+    for (const q of currentQueue) {
+      getAppStatus(q.appid).then(q.resolve).catch(q.reject);
+    }
+  }
+}
+
 async function getResolvedAppStatus(appid: string): Promise<AppStatus> {
   if (appStatusCache.has(appid)) {
     return appStatusCache.get(appid)!;
   }
-  const promise = getAppStatus(appid).catch((err) => {
+  
+  const promise = new Promise<AppStatus>((resolve, reject) => {
+    batchQueue.push({ appid, resolve, reject });
+    if (!batchTimeout) {
+      batchTimeout = window.setTimeout(processBatch, 20);
+    }
+  }).catch((err) => {
     appStatusCache.delete(appid);
     throw err;
   });
+  
   appStatusCache.set(appid, promise);
   return promise;
 }
