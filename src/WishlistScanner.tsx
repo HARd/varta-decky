@@ -26,46 +26,6 @@ export const WishlistScanner: FC<WishlistScannerProps> = ({ getAppStatus, lang }
   const [scanComplete, setScanComplete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const getSessionId = async () => {
-    try {
-      const win = window as any;
-      if (win.g_sessionID) return win.g_sessionID;
-      if (win.SteamClient?.User?.GetSessionID) return win.SteamClient.User.GetSessionID();
-      if (win.SteamClient?.Auth?.GetSessionID) return win.SteamClient.Auth.GetSessionID();
-      if (win.SteamClient?.UserStore?.sessionid) return win.SteamClient.UserStore.sessionid;
-
-      const matchCookie = document.cookie.match(/sessionid=([^;]+)/);
-      if (matchCookie) return matchCookie[1];
-
-      // Fallback to fetch (often blocked by CSP on Steam Deck)
-      let res = await fetch("https://store.steampowered.com/", { credentials: "include" });
-      let text = await res.text();
-      let match = text.match(/g_sessionID\s*=\s*"([^"]+)"/) || text.match(/data-sessionid="([^"]+)"/) || text.match(/sessionid=([^;"]+)/);
-      if (match) return match[1];
-
-      res = await fetch("https://steamcommunity.com/", { credentials: "include" });
-      text = await res.text();
-      match = text.match(/g_sessionID\s*=\s*"([^"]+)"/) || text.match(/data-sessionid="([^"]+)"/) || text.match(/sessionid=([^;"]+)/);
-      if (match) return match[1];
-
-      console.error("Could not find sessionID in HTML. Lengths:", text.length);
-      toaster.toast({
-        title: "Помилка Wishlist",
-        body: "Не вдалося знайти sessionID локально або через fetch.",
-        duration: 4000,
-      });
-      return null;
-    } catch (e: any) {
-      console.error("Failed to get sessionID", e);
-      toaster.toast({
-        title: "Помилка доступу (CSP/CORS)",
-        body: "Браузер Steam Deck блокує запит. Спробуйте вручну.",
-        duration: 4000,
-      });
-      return null;
-    }
-  };
-
   const scanWishlist = async () => {
     setIsScanning(true);
     setScanComplete(false);
@@ -95,7 +55,8 @@ export const WishlistScanner: FC<WishlistScannerProps> = ({ getAppStatus, lang }
             const appid = String(numAppid);
             const status = await getAppStatus(appid);
             
-            if (status.type === "hostile") {
+            const vartaStatus = (status as any).varta;
+            if (vartaStatus && vartaStatus.type === "hostile") {
               foundHostiles.push(status);
             }
             completed++;
@@ -142,49 +103,33 @@ export const WishlistScanner: FC<WishlistScannerProps> = ({ getAppStatus, lang }
         setIsDeleting(false);
         return;
       }
-
-      // 2. Fallback to raw fetch if sessionID can be found
-      const sessionId = await getSessionId();
-      if (!sessionId) {
+      
+      // 3. Fallback to Steam Web API
+      const match = document.cookie.match(/sessionid=([^;]+)/);
+      const sessionId = match ? match[1] : (win.g_sessionID || "");
+      
+      if (sessionId) {
+        for (const game of hostileGames) {
+          await fetch("https://store.steampowered.com/api/removefromwishlist", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            },
+            body: `sessionid=${sessionId}&appid=${game.appid}`,
+            credentials: "include",
+          });
+        }
+        setHostileGames([]);
+        toaster.toast({ title: "Успіх", body: "Ігри видалено через Web API!", duration: 4000 });
         setIsDeleting(false);
         return;
       }
-      for (const game of hostileGames) {
-        await fetch("https://store.steampowered.com/api/removefromwishlist", {
-          method: "POST",
-          credentials: "include",
-          mode: "no-cors",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: `sessionid=${sessionId}&appid=${game.appid}`
-        });
-      }
-      // Control check: verify if the games actually disappeared
-      const checkRes = await fetch(`https://store.steampowered.com/dynamicstore/userdata/?_=${Date.now()}`, {
-        credentials: "include",
-        cache: "no-store"
+
+      toaster.toast({
+        title: "Помилка",
+        body: "Не знайдено API для видалення ігор (включаючи Web API).",
+        duration: 4000,
       });
-      const checkData = await checkRes.json();
-      const currentWishlist: number[] = checkData.rgWishlist || [];
-      
-      const stillInWishlist = hostileGames.filter(g => currentWishlist.includes(parseInt(g.appid)));
-      
-      if (stillInWishlist.length > 0) {
-        setHostileGames(stillInWishlist);
-        toaster.toast({
-          title: "Увага",
-          body: `Вдалося видалити не все. Залишилося ${stillInWishlist.length} ігор.`,
-          duration: 4000,
-        });
-      } else {
-        setHostileGames([]);
-        toaster.toast({
-          title: "Успіх",
-          body: "Ігри успішно видалено зі списку бажаного!",
-          duration: 4000,
-        });
-      }
     } catch (e: any) {
       console.error("Failed to remove games", e);
       toaster.toast({

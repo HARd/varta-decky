@@ -8,15 +8,17 @@ const DEFAULT_SETTINGS: PluginSettings = {
   overlayOpacity: 0.35,
   showBadges: true,
   remoteDatabaseEnabled: true,
-  remoteDatabaseUrl: "https://hrai-decky-default-rtdb.europe-west1.firebasedatabase.app/",
+  remoteDatabaseUrl: "https://api.varta.games/public",
   libraryBadgePosition: "bottom-right",
-  libraryBadgeStyle: "text",
+  libraryBadgeStyle: "icon",
   language: "uk",
   showReportButton: true,
   lastSeenHostileCount: 0,
   lastSeenUkrCount: 0,
   analyticsEnabled: true,
   analyticsId: "",
+  showPrystanokLoc: true,
+  detailedPrystanokBadges: true,
 };
 
 const SETTINGS_KEY = "varta-settings";
