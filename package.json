@@ -7,7 +7,7 @@
     "build": "node scripts/generate-registry.mjs && node scripts/build.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "watch": "node scripts/generate-registry.mjs && rollup -c -w",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node scripts/generate-registry.mjs && tsc --noEmit"
   },
   "keywords": [
     "decky",
