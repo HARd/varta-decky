@@ -23,6 +23,8 @@ import { initGridObserver, stopGridObserver } from "./gridObserver";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
 import { getExtensions } from "./extensions/registry";
+import PrystanokExtension from "./extensions/prystanok";
+import VartaCoreExtension from "./extensions/varta";
 const DEFAULT_SETTINGS: PluginSettings = {
   markHostile: true,
   markUkrainian: true,
@@ -255,9 +257,8 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
-      {getExtensions().map((ext) => (
-        ext.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })
-      ))}
+      {PrystanokExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
+      {VartaCoreExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
 
       {updateInfo?.hasUpdate && (
         <PanelSection>
