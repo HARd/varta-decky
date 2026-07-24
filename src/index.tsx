@@ -5,7 +5,7 @@ import {
   staticClasses,
 } from "@decky/ui";
 import { callable, definePlugin, routerHook, toaster } from "@decky/api";
-import { useEffect, useState, Component, ReactNode, ErrorInfo, Fragment } from "react";
+import { useEffect, useState, Component, ReactNode, ErrorInfo } from "react";
 import { reportError } from "./errorReporter";
 import { FaFlag } from "react-icons/fa";
 import {
@@ -256,9 +256,7 @@ function Content() {
       </PanelSection>
 
       {getExtensions().map((ext) => (
-        <Fragment key={ext.id}>
-          {ext.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
-        </Fragment>
+        ext.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })
       ))}
 
       {updateInfo?.hasUpdate && (
