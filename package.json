@@ -1,6 +1,6 @@
 {
   "name": "varta-decky",
-  "version": "1.0.18",
+  "version": "1.0.19-testing.1",
   "description": "VARTA and Prystanok game scanner for Steam Deck",
   "type": "module",
   "scripts": {
