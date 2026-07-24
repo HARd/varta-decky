@@ -177,6 +177,7 @@ function Content() {
     setSyncing(true);
     try {
       const dbStats = await refreshDatabase(true);
+      clearAppStatusCache();
       setDb(dbStats);
       refreshStorePatch();
       window.dispatchEvent(new CustomEvent("varta-settings-changed"));
@@ -357,8 +358,22 @@ export default definePlugin(() => {
   };
 });
 
+const appStatusCache = new Map<string, Promise<AppStatus>>();
+
+function clearAppStatusCache() {
+  appStatusCache.clear();
+}
+
 async function getResolvedAppStatus(appid: string): Promise<AppStatus> {
-  return getAppStatus(appid);
+  if (appStatusCache.has(appid)) {
+    return appStatusCache.get(appid)!;
+  }
+  const promise = getAppStatus(appid).catch((err) => {
+    appStatusCache.delete(appid);
+    throw err;
+  });
+  appStatusCache.set(appid, promise);
+  return promise;
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
