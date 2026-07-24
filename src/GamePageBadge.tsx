@@ -105,23 +105,22 @@ export default function GamePageBadge({ lookup, getSettings, placement = "librar
 }
 
 function getLibraryPositionStyles(pos: string) {
+  const base: any = { display: "flex", flexDirection: "column", gap: "8px" };
   switch (pos) {
     case "top-left":
-      return { top: "58px", left: "22px", right: "auto" };
+      return { ...base, alignItems: "flex-start", top: "58px", left: "22px", right: "auto" };
     case "top-right":
-      return { top: "58px", right: "22px", left: "auto" };
+      return { ...base, alignItems: "flex-end", top: "58px", right: "22px", left: "auto" };
     case "bottom-left":
-      return { top: "170px", left: "22px", right: "auto" };
+      return { ...base, alignItems: "flex-start", top: "170px", left: "22px", right: "auto" };
     case "bottom-right":
     default:
-      return { top: "170px", right: "22px", left: "auto" };
+      return { ...base, alignItems: "flex-end", top: "170px", right: "22px", left: "auto" };
   }
 }
 
 const libraryContainerStyle = {
   position: "absolute",
-  top: "170px",
-  right: "22px",
   zIndex: 20,
   pointerEvents: "none",
 } as const;
@@ -132,4 +131,8 @@ const storeContainerStyle = {
   right: "92px",
   zIndex: 999999,
   pointerEvents: "none",
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  alignItems: "flex-end",
 } as const;
