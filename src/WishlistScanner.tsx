@@ -103,10 +103,31 @@ export const WishlistScanner: FC<WishlistScannerProps> = ({ getAppStatus, lang }
         setIsDeleting(false);
         return;
       }
+      
+      // 3. Fallback to Steam Web API
+      const match = document.cookie.match(/sessionid=([^;]+)/);
+      const sessionId = match ? match[1] : (win.g_sessionID || "");
+      
+      if (sessionId) {
+        for (const game of hostileGames) {
+          await fetch("https://store.steampowered.com/api/removefromwishlist", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            },
+            body: `sessionid=${sessionId}&appid=${game.appid}`,
+            credentials: "include",
+          });
+        }
+        setHostileGames([]);
+        toaster.toast({ title: "Успіх", body: "Ігри видалено через Web API!", duration: 4000 });
+        setIsDeleting(false);
+        return;
+      }
 
       toaster.toast({
         title: "Помилка",
-        body: "Не знайдено нативних API SteamClient для видалення ігор.",
+        body: "Не знайдено API для видалення ігор (включаючи Web API).",
         duration: 4000,
       });
     } catch (e: any) {

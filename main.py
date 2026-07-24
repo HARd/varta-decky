@@ -357,6 +357,9 @@ class Plugin:
         details = details or {}
         
         status = {"appid": str(appid)}
+        if details and "name" in details:
+            status["name"] = details["name"]
+        
         for ext in self.extensions:
             try:
                 ext_status = await ext.get_app_status(str(appid), details, self._settings)
