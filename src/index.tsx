@@ -22,9 +22,7 @@ import { initStorePatch, refreshStorePatch } from "./storePatch";
 import { initGridObserver, stopGridObserver } from "./gridObserver";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
-
-import PrystanokExtension from "./extensions/prystanok";
-import VartaCoreExtension from "./extensions/varta";
+import { RenderAllExtensions } from "./extensions/registry";
 const DEFAULT_SETTINGS: PluginSettings = {
   markHostile: true,
   markUkrainian: true,
@@ -257,8 +255,7 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
-      {VartaCoreExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
-      {PrystanokExtension.renderSettings({ settings, setSetting: updateSetting, lang, getAppStatus: getResolvedAppStatus })}
+      <RenderAllExtensions settings={settings} setSetting={updateSetting} lang={lang} getAppStatus={getResolvedAppStatus} />
 
       {updateInfo?.hasUpdate && (
         <PanelSection>
