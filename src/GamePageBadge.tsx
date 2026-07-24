@@ -63,7 +63,7 @@ export default function GamePageBadge({ lookup, getSettings, placement = "librar
                 src={iconSrc} 
                 alt={chip.label} 
                 title={chip.label}
-                style={{ width: "64px", height: "auto", filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.6))" }} 
+                style={{ width: "48px", height: "auto", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }} 
               />
             );
           }
@@ -77,22 +77,22 @@ export default function GamePageBadge({ lookup, getSettings, placement = "librar
               style={{
                 background: color,
                 color: "#fff",
-                padding: "8px 16px 8px 12px",
+                padding: "6px 12px 6px 8px",
                 borderRadius: "8px",
                 fontFamily: "Motiva Sans, Arial, sans-serif",
-                fontSize: "14px",
+                fontSize: "12px",
                 fontWeight: "bold",
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                gap: "6px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
               }}
               title={chip.label}
             >
               {iconSrc && (
                 <img 
                   src={iconSrc} 
-                  style={{ height: "28px", width: "auto", display: "block", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }} 
+                  style={{ height: "22px", width: "auto", display: "block", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }} 
                   alt="" 
                 />
               )}
@@ -112,10 +112,10 @@ function getLibraryPositionStyles(pos: string) {
     case "top-right":
       return { ...base, alignItems: "flex-end", top: "58px", right: "22px", left: "auto" };
     case "bottom-left":
-      return { ...base, alignItems: "flex-start", top: "170px", left: "22px", right: "auto" };
+      return { ...base, alignItems: "flex-start", top: "135px", left: "22px", right: "auto" };
     case "bottom-right":
     default:
-      return { ...base, alignItems: "flex-end", top: "170px", right: "22px", left: "auto" };
+      return { ...base, alignItems: "flex-end", top: "135px", right: "22px", left: "auto" };
   }
 }
 
