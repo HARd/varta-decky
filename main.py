@@ -109,7 +109,12 @@ class Plugin:
             self._loaded = True
 
             self._cache_dirty = False
-            self._cache = self._load_json(os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json"), {})
+            self._cache_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "appdetails-cache.json")
+            now = time.time()
+            self._cache = {
+                k: v for k, v in self._load_json(self._cache_path, {}).items()
+                if isinstance(v, dict) and now - v.get("ts", 0) < CACHE_TTL_SECONDS
+            }
 
             # Ensure a stable analytics ID exists
             if not self._settings.get("analyticsId"):
@@ -257,21 +262,15 @@ class Plugin:
                 with urllib.request.urlopen(req, timeout=10, context=SSL_CONTEXT) as response:
                     if response.getcode() == 200:
                         releases = json.loads(response.read().decode("utf-8"))
-                        current_is_stable = "stable" in current.lower()
+                        # Stable tags come as both "v1.0.19" and "v1.0.16-stable", so channel = testing or not.
                         current_is_testing = "testing" in current.lower()
-                        
+
                         latest = None
                         for r in releases:
+                            if r.get("draft"):
+                                continue
                             tag = r.get("tag_name", "").lstrip("v")
-                            is_match = False
-                            if current_is_stable and "stable" in tag.lower():
-                                is_match = True
-                            elif current_is_testing and "testing" in tag.lower():
-                                is_match = True
-                            elif not current_is_stable and not current_is_testing:
-                                is_match = True
-                                
-                            if is_match:
+                            if ("testing" in tag.lower()) == current_is_testing:
                                 latest = tag
                                 for asset in r.get("assets", []):
                                     if asset.get("name", "").endswith(".zip"):
@@ -439,6 +438,11 @@ class Plugin:
         return success
 
     def _fetch_appdetails(self, appid):
+        appid = str(appid)
+        cached = self._cache.get(appid)
+        if cached and time.time() - cached.get("ts", 0) < CACHE_TTL_SECONDS:
+            return cached["data"]
+
         url = f"https://store.steampowered.com/api/appdetails?appids={appid}"
         req = urllib.request.Request(url, headers={"User-Agent": "varta-decky/0.2"})
         payload = None
@@ -453,11 +457,15 @@ class Plugin:
             entry = payload.get(appid)
             if entry and entry.get("success") and entry.get("data"):
                 data = entry["data"]
-                return {
+                result = {
                     "name": data.get("name") or "Unknown Game",
                     "developers": data.get("developers") or [],
                     "publishers": data.get("publishers") or [],
                 }
+                # Only successes are cached, so a 429/timeout gets retried on the next lookup.
+                self._cache[appid] = {"ts": time.time(), "data": result}
+                self._cache_dirty = True
+                return result
         return None
 
     async def _refresh_database(self, force=False):
@@ -491,7 +499,7 @@ class Plugin:
             return
         self._cache_dirty = False
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._save_json, self._cache_path, self._cache)
+        await loop.run_in_executor(None, self._save_json, self._cache_path, self._cache.copy())
 
     async def report_frontend_error(self, message, stack=""):
         decky.logger.error(f"Frontend Error: {message}\n{stack}")

@@ -9,17 +9,12 @@ import { useEffect, useState, Component, ReactNode, ErrorInfo } from "react";
 import { reportError } from "./errorReporter";
 import { FaFlag } from "react-icons/fa";
 import {
-  startSteamUiInjection,
-  stopSteamUiInjection,
-  updateSteamUiInjectionSettings,
-} from "./injector";
-import {
   getLocalSettings,
   saveLocalSettings,
 } from "./localBackend";
 import { patchLibraryApp } from "./patchLibraryApp";
 import { initStorePatch, refreshStorePatch } from "./storePatch";
-import { initGridObserver, stopGridObserver } from "./gridObserver";
+import { patchLibraryTiles } from "./libraryTilePatch";
 import type { AppStatus, PluginSettings, DatabaseStats } from "./types";
 import { t } from "./i18n";
 import { RenderAllExtensions } from "./extensions/registry";
@@ -79,7 +74,6 @@ function Content() {
   useEffect(() => {
     let mounted = true;
     setSettings(activeSettings);
-    startSteamUiInjection(getResolvedAppStatus, activeSettings);
 
     if (!fetchedFromPython) {
       void withTimeout(getSettings(), BACKEND_TIMEOUT_MS, "get_settings")
@@ -103,7 +97,6 @@ function Content() {
           activeSettings = merged;
           setSettings(merged);
           setIsLoaded(true);
-          startSteamUiInjection(getResolvedAppStatus, merged);
         })
         .catch(() => {
           fetchedFromPython = true;
@@ -151,13 +144,13 @@ function Content() {
   }, []);
 
   const updateSetting = <K extends keyof PluginSettings>(key: K, value: PluginSettings[K]) => {
-    const next = { ...settings, [key]: value };
+    // activeSettings, not the `settings` closure: back-to-back calls would otherwise drop each other's keys
+    const next = { ...activeSettings, [key]: value };
     activeSettings = next;
     
     saveLocalSettings(next);
     
     setSettings(next);
-    updateSteamUiInjectionSettings(next);
     refreshStorePatch();
     window.dispatchEvent(new CustomEvent("varta-settings-changed"));
     
@@ -338,8 +331,7 @@ export default definePlugin(() => {
 
   const libraryPatch = patchLibraryApp(getResolvedAppStatus, () => activeSettings);
   const stopStorePatch = initStorePatch(getResolvedAppStatus, () => activeSettings);
-  initGridObserver(getResolvedAppStatus, () => activeSettings);
-  startSteamUiInjection(getResolvedAppStatus, getLocalSettings());
+  const unpatchLibraryTiles = patchLibraryTiles(getResolvedAppStatus, () => activeSettings);
 
   return {
     name: "VARTA",
@@ -349,8 +341,7 @@ export default definePlugin(() => {
     onDismount() {
       routerHook.removePatch("/library/app/:appid", libraryPatch);
       stopStorePatch();
-      stopGridObserver();
-      stopSteamUiInjection();
+      unpatchLibraryTiles();
     },
   };
 });
