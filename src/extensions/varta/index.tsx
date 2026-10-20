@@ -2,7 +2,6 @@ import {
   PanelSection,
   PanelSectionRow,
   ToggleField,
-  SliderField,
   DropdownItem,
 } from "@decky/ui";
 import { t } from "../../i18n";
@@ -85,17 +84,6 @@ const VartaCoreExtension: VartaExtension = {
               label={t(lang, "menu_show_report")}
               checked={settings.showReportButton}
               onChange={(checked) => setSetting("showReportButton", checked)}
-            />
-          </PanelSectionRow>
-          <PanelSectionRow>
-            <SliderField
-              label={t(lang, "menu_overlay_opacity")}
-              description={`${Math.round(settings.overlayOpacity * 100)}%`}
-              value={settings.overlayOpacity}
-              min={0.05}
-              max={1}
-              step={0.05}
-              onChange={(value) => setSetting("overlayOpacity", value)}
             />
           </PanelSectionRow>
           <PanelSectionRow>

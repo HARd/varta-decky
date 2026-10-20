@@ -23,7 +23,6 @@ const DEFAULT_SETTINGS: PluginSettings = {
   markUkrainian: true,
   hostileColor: "#7a2a2a",
   ukrainianColor: "#27ae60",
-  overlayOpacity: 0.35,
   showBadges: true,
   remoteDatabaseEnabled: true,
   remoteDatabaseUrl: "https://api.varta.games/public",

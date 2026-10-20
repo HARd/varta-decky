@@ -21,7 +21,6 @@ DEFAULT_SETTINGS = {
     "markUkrainian": True,
     "hostileColor": "#7a2a2a",
     "ukrainianColor": "#27ae60",
-    "overlayOpacity": 0.35,
     "showBadges": True,
     "remoteDatabaseEnabled": True,
     "remoteDatabaseUrl": "https://api.varta.games/public",
