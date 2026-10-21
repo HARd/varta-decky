@@ -5,7 +5,6 @@ export interface PluginSettings {
   markUkrainian: boolean;
   hostileColor: string;
   ukrainianColor: string;
-  overlayOpacity: number;
   showBadges: boolean;
   remoteDatabaseEnabled: boolean;
   remoteDatabaseUrl: string;
