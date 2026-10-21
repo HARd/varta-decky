@@ -10,6 +10,14 @@ class ExtensionBase:
         """Викликається один раз при завантаженні (або перезавантаженні налаштувань)."""
         pass
 
+    async def prefetch(self, appids: list, settings: dict):
+        """
+        Необов'язковий хук: викликається з усім списком appid перед get_app_status
+        по кожному з них. Модуль, чий API вміє батчі, може тут одним запитом
+        наповнити свій кеш, щоб потім не ходити в мережу по одній грі.
+        """
+        pass
+
     async def get_app_status(self, appid: str, app_details: dict, settings: dict) -> dict:
         """
         Повертає статус гри для даного appid.
