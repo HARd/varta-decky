@@ -8,10 +8,10 @@ import {
   PrystanokCCIcon,
   PrystanokCCSpeakerIcon,
   PrystanokHandIcon,
-  PrystanokTriangleIcon,
+  PrystanokTriangleRedIcon,
   PrystanokShieldIcon
 } from "../../icons";
-import { classify } from "./classify";
+import { classify, isBadgeableType } from "./classify";
 
 const PrystanokExtension: VartaExtension = {
   id: "prystanok",
@@ -44,6 +44,7 @@ const PrystanokExtension: VartaExtension = {
     const chips: ChipPayload[] = [];
     const verdict = classify((status as any)?.prystanok);
     if (!verdict) return chips;
+    if (!isBadgeableType(verdict.appType)) return chips; // not a game, not even a threat badge
 
     const detailed = settings.detailedPrystanokBadges ?? true;
     const isIcon = settings.libraryBadgeStyle === "icon";
@@ -65,8 +66,9 @@ const PrystanokExtension: VartaExtension = {
         type: "hostile",
         label: detailed ? "Ймовірно сумнівна гра" : "Сумнівна",
         isIcon,
-        iconSrc: PrystanokTriangleIcon,
-        libraryIconSrc: PrystanokTriangleIcon,
+        // red, so in the grid it reads differently from the orange vendor shield
+        iconSrc: PrystanokTriangleRedIcon,
+        libraryIconSrc: PrystanokTriangleRedIcon,
         background: "rgba(192, 57, 43, 0.9)",
       });
     } else if (verdict.threatLevel === "vendor") {

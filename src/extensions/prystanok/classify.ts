@@ -11,6 +11,26 @@ export interface PrystanokVerdict {
   official: boolean | null; // null = no KULI record: localization comes from Steam
   semiOfficial: boolean;
   ukrainian: boolean;
+  appType: string | null;
+}
+
+// Soundtracks, trailers, hardware etc. A badge on them is just noise.
+// No type at all still counts as a game: the field is often missing.
+const NON_BADGEABLE = new Set([
+  "Music",
+  "Video",
+  "Movie",
+  "Series",
+  "Episode",
+  "Hardware",
+  "Tool",
+  "Software",
+  "Guide",
+  "Advertising",
+]);
+
+export function isBadgeableType(appType: string | null): boolean {
+  return !appType || !NON_BADGEABLE.has(appType);
 }
 
 // Compare whole words: "SemiOfficial" contains "Official".
@@ -83,5 +103,6 @@ export function classify(raw: any): PrystanokVerdict | null {
     official,
     semiOfficial,
     ukrainian: origin === "Ukrainian",
+    appType: typeof steam?.Type === "string" ? steam.Type : null,
   };
 }
