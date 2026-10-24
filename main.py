@@ -395,6 +395,15 @@ class Plugin:
         return status
 
     async def get_app_statuses(self, appids):
+        await self._ensure_loaded()
+        # let batch-capable extensions warm their caches with the whole list first
+        str_ids = [str(appid) for appid in appids]
+        for ext in self.extensions:
+            try:
+                await ext.prefetch(str_ids, self._settings)
+            except Exception as e:
+                decky.logger.error(f"VARTA prefetch failed in {type(ext).__name__}: {e}")
+
         # Process a batch of appids concurrently
         tasks = [self.get_app_status(appid) for appid in appids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
