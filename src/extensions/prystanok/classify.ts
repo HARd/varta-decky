@@ -70,9 +70,12 @@ export function classify(raw: any): PrystanokVerdict | null {
     }
   }
 
+  // Without a KULI record there is nothing confirming the game itself, so a
+  // verdict built purely on vendor statistics stops at "suspect": Prystanok's
+  // per-vendor counts can be wrong (Bungie has shown 9 russian games of 11).
   let threatLevel: ThreatLevel = null;
-  if (origin === "Russian" || russianDeveloper) threatLevel = "russian";
-  else if (majorityVendor) threatLevel = "suspect";
+  if (origin === "Russian" || (russianDeveloper && kuli)) threatLevel = "russian";
+  else if (russianDeveloper || majorityVendor) threatLevel = "suspect";
   else if (vendorReasons.length) threatLevel = "vendor";
 
   return {

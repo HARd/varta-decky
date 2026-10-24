@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
   analyticsEnabled: true,
   analyticsId: "",
   showPrystanokLoc: true,
+  showPrystanokThreats: true,
   detailedPrystanokBadges: true,
 };
 

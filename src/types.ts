@@ -17,6 +17,7 @@ export interface PluginSettings {
   analyticsEnabled: boolean;
   analyticsId: string;
   showPrystanokLoc: boolean;
+  showPrystanokThreats: boolean;
   detailedPrystanokBadges: boolean;
 }
 

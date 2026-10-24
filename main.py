@@ -25,13 +25,16 @@ DEFAULT_SETTINGS = {
     "remoteDatabaseEnabled": True,
     "remoteDatabaseUrl": "https://api.varta.games/public",
     "libraryBadgePosition": "bottom-right",
-    "libraryBadgeStyle": "text",
+    "libraryBadgeStyle": "icon",
     "language": "uk",
     "showReportButton": True,
     "lastSeenHostileCount": 0,
     "lastSeenUkrCount": 0,
     "analyticsEnabled": True,
     "analyticsId": "",
+    "showPrystanokLoc": True,
+    "showPrystanokThreats": True,
+    "detailedPrystanokBadges": True,
 }
 
 CACHE_TTL_SECONDS = 60 * 60 * 24 * 14
@@ -176,6 +179,7 @@ class Plugin:
                 decky.logger.error(f"Auto-refresh failed: {e}")
 
     async def get_settings(self):
+        await self._ensure_loaded()
         res = {**DEFAULT_SETTINGS, **self._settings}
         res["_is_fresh"] = getattr(self, "_is_fresh", False)
         return res
@@ -202,10 +206,21 @@ class Plugin:
         self._save_json(self._settings_path, self._settings)
         return self._settings
 
-    async def set_setting(self, key, value):
+    async def set_setting(self, *args, **kwargs):
+        # @decky/api sends one positional object: callable<[{key, value}]>
+        if args and isinstance(args[0], dict):
+            payload = args[0]
+        elif len(args) >= 2:
+            payload = {"key": args[0], "value": args[1]}
+        else:
+            payload = kwargs
+        key, value = payload.get("key"), payload.get("value")
         decky.logger.info(f"set_setting: {key} = {value}")
         await self._ensure_loaded()
-        
+
+        if key is None:
+            return self._settings
+
         if key == "analyticsId" and not value and self._settings.get("analyticsId"):
             return self._settings
             
